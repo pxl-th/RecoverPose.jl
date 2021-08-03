@@ -7,6 +7,12 @@ using TypedPolynomials
 using MultivariatePolynomials
 using RowEchelon
 
+@polyvar x y z
+const REORDER = [1,7,2,4,3,11,8,14,5,12,6,13,17,9,15,18,10,16,19,20]
+
+include("utils.jl")
+include("chirality.jl")
+
 """
 - `points1`:
     Pixel coordinates of the matched points in `(y, x)` format
@@ -36,23 +42,21 @@ function five_point(points1, points2, K1, K2)
             (points2[i][1] - K2[2, 3]) / K2[2, 2],
         )
     end
+    five_point(p1, p2)
+end
 
-    F = Matrix{Float64}(undef, length(points1), 9)
-    for i in 1:length(points1)
-        F[i, 1] = p2[i][1] * p1[i][1] # x2 * x1
-        F[i, 2] = p2[i][1] * p1[i][2] # x2 * y1
-        F[i, 3] = p2[i][1]            # x2
+"""
+Compute essential matrix using Five-Point algorithm.
 
-        F[i, 4] = p2[i][2] * p1[i][1] # y2 * x1
-        F[i, 5] = p2[i][2] * p1[i][2] # y2 * y1
-        F[i, 6] = p2[i][2]            # y2
+# Arguments:
+- `p1`: Vector of points, pre-divided by `K` matrix in `(x, y)` format.
+- `p2`: Vector of points, pre-divided by `K` matrix in `(x, y)` format.
 
-        F[i, 7] = p1[i][1]            # x1
-        F[i, 8] = p1[i][2]            # y1
-        F[i, 9] = 1
-    end
-
-    V = svd(F; full=true).V
+# Returns:
+    Essential matrix, projection matrix and boolean vector indicating inliers.
+"""
+function five_point(p1, p2)
+    V = null_space(p1, p2)
 
     E1 = SMatrix{3, 3, Float64}(
         V[1, 6], V[4, 6], V[7, 6],
@@ -75,77 +79,41 @@ function five_point(points1, points2, K1, K2)
         V[3, 9], V[6, 9], V[9, 9],
     )
 
-    # One equation from rank constraint.
-    @polyvar x y z
-    # Coefficients.
-    c11 = E1[1, 1] * x + E2[1, 1] * y + E3[1, 1] * z + E4[1, 1]
-    c12 = E1[1, 2] * x + E2[1, 2] * y + E3[1, 2] * z + E4[1, 2]
-    c13 = E1[1, 3] * x + E2[1, 3] * y + E3[1, 3] * z + E4[1, 3]
+    rref_M = compute_rref(E1, E2, E3, E4)
 
-    c21 = E1[2, 1] * x + E2[2, 1] * y + E3[2, 1] * z + E4[2, 1]
-    c22 = E1[2, 2] * x + E2[2, 2] * y + E3[2, 2] * z + E4[2, 2]
-    c23 = E1[2, 3] * x + E2[2, 3] * y + E3[2, 3] * z + E4[2, 3]
-
-    c31 = E1[3, 1] * x + E2[3, 1] * y + E3[3, 1] * z + E4[3, 1]
-    c32 = E1[3, 2] * x + E2[3, 2] * y + E3[3, 2] * z + E4[3, 2]
-    c33 = E1[3, 3] * x + E2[3, 3] * y + E3[3, 3] * z + E4[3, 3]
-
-    # row1 - vector containing 20 coefficients for the first equation.
-    row1 =
-        c11 * c22 * c33 + c12 * c23 * c31 +
-        c13 * c21 * c32 - c13 * c22 * c31 -
-        c12 * c21 * c33 - c11 * c23 * c32
-
-    # 9 equations from trace constraint.
-    # Coefficients.
-    e1 = E1 * x + E2 * y + E3 * z + E4
-    e2 = E1' * x + E2' * y + E3' * z + E4'
-
-    mat_part = (e1 * e2) * e1
-    trace_part = trace(e1 * e2) * e1
-
-    row33 = mat_part .- 0.5 .* trace_part
-    row9 = mapreduce(
-        mi -> reshape(coefficient.(row33, mi), 9),
-        hcat, monomials(row33[1]),
-    )
-
-    M = vcat(coefficients(row1)', row9) # 10x20 matrix.
-
-    col_order = [
-        1, 7, 2, 4, 3, 11, 8, 14, 5, 12, 6, 13, 17, 9, 15, 18, 10, 16, 19, 20,
-    ]
-    Base.permutecols!!(M, col_order)
-    rref_M = rref(M)
-
-    eq_k = subtr(rref_M[5, 11:20], rref_M[6, 11:20])
-    eq_l = subtr(rref_M[7, 11:20], rref_M[8, 11:20])
-    eq_m = subtr(rref_M[9, 11:20], rref_M[10, 11:20])
+    eq_k = subtract(@view(rref_M[5, 11:20]), @view(rref_M[6, 11:20]))
+    eq_l = subtract(@view(rref_M[7, 11:20]), @view(rref_M[8, 11:20]))
+    eq_m = subtract(@view(rref_M[9, 11:20]), @view(rref_M[10, 11:20]))
 
     # Factorization.
-    B11 = eq_k[1] * z^3 + eq_k[2] * z^2 + eq_k[3] * z + eq_k[4]
-    B12 = eq_k[5] * z^3 + eq_k[6] * z^2 + eq_k[7] * z + eq_k[8]
-    B13 = eq_k[9] * z^4 + eq_k[10] * z^3 + eq_k[11] * z^2 + eq_k[12] * z + eq_k[13]
-    B21 = eq_l[1] * z^3 + eq_l[2] * z^2 + eq_l[3] * z + eq_l[4]
-    B22 = eq_l[5] * z^3 + eq_l[6] * z^2 + eq_l[7] * z + eq_l[8]
-    B23 = eq_l[9] * z^4 + eq_l[10] * z^3 + eq_l[11] * z^2 + eq_l[12] * z + eq_l[13]
-    B31 = eq_m[1] * z^3 + eq_m[2] * z^2 + eq_m[3] * z + eq_m[4]
-    B32 = eq_m[5] * z^3 + eq_m[6] * z^2 + eq_m[7] * z + eq_m[8]
-    B33 = eq_m[9] * z^4 + eq_m[10] * z^3 + eq_m[11] * z^2 + eq_m[12] * z + eq_m[13]
+    B11 = to_polynom(@view(eq_k[1:4]), z)
+    B12 = to_polynom(@view(eq_k[5:8]), z)
+    B13 = to_polynom(@view(eq_k[9:13]), z)
+
+    B21 = to_polynom(@view(eq_l[1:4]), z)
+    B22 = to_polynom(@view(eq_l[5:8]), z)
+    B23 = to_polynom(@view(eq_l[9:13]), z)
+
+    B31 = to_polynom(@view(eq_m[1:4]), z)
+    B32 = to_polynom(@view(eq_m[5:8]), z)
+    B33 = to_polynom(@view(eq_m[9:13]), z)
+
     # Calculate determinant.
     P1 = B23 * B12 - B13 * B22
     P2 = B13 * B21 - B23 * B11
     P3 = B11 * B22 - B12 * B21
     det_B = P1 * B31 + P2 * B32 + P3 * B33
+
     # Normalize the coefficient of the highest order.
     if (coefficient(det_B, z^10) ≉ 0)
         det_B = det_B / coefficient(det_B, z^10)
     end
-    # Extract roots of polynomial with companion matrix.
+
+    # Extract real roots of polynomial with companion matrix.
     coeffs = -coefficients(det_B)[end:-1:2]
     sol_z = eigen(vcat(hcat(zeros(9, 1), Matrix(I, 9, 9)), coeffs')).values
-    # Select only real roots.
     sol_z = [real(s) for s in sol_z if isreal(s)]
+
     # Compute x & y.
     z6 = hcat(
         sol_z .^ 6, sol_z .^ 5, sol_z .^ 4,
@@ -160,8 +128,16 @@ function five_point(points1, points2, K1, K2)
     sol_x = P1z ./ P3z
     sol_y = P2z ./ P3z
 
+    test_candidates(p1, p2, E1, E2, E3, E4, sol_x, sol_y, sol_z)
+end
+
+"""
+Test candidates for the essential matrix and return the best candidate.
+"""
+function test_candidates(p1, p2, E1, E2, E3, E4, sol_x, sol_y, sol_z)
     # Perform chirality testing to select best E candidate.
-    best_inliers = 0
+    best_inliers = nothing
+    best_n_inliers = 0
     E_res = nothing
     P_res = nothing
 
@@ -170,99 +146,17 @@ function five_point(points1, points2, K1, K2)
         E = @. sol_x[i] * E1 + sol_y[i] * E2 + sol_z[i] * E3 + E4
 
         for P in compute_projections(E)
-            n_inliers = chirality_test(p1, p2, P_ref, P)
-            if n_inliers > best_inliers
-                best_inliers = n_inliers
-                E_res = E
-                P_res = P
-            end
+            n_inliers, inliers = chirality_test(p1, p2, P_ref, P)
+            n_inliers ≤ best_n_inliers && continue
+
+            best_n_inliers = n_inliers
+            best_inliers = inliers
+            E_res = E
+            P_res = P
         end
     end
 
     E_res, P_res, best_inliers
-end
-
-"""
-p1 & p2 in x, y format, pre-divided by K
-"""
-function chirality_test(p1, p2, P1, P2)
-    n_inliers = 0
-    n_points = length(p1)
-    for i in 1:n_points
-        pt3d = triangulate_point(p1[i], p2[i], P1, P2)
-        x1 = P1 * pt3d
-        x2 = P2 * pt3d
-        s = pt3d[4] < 0 ? -1 : 1
-        s1 = x1[3] < 0 ? -1 : 1
-        s2 = x2[3] < 0 ? -1 : 1
-        if s * (s1 + s2) == 2
-            n_inliers += 1
-        end
-        # If there are only 5 points, solution must be perfect, otherwise fail.
-        # In other cases, there must be at least 75% inliers
-        # for the solution to be considered valid.
-        if (n_points == 5 && n_inliers < i) || (n_inliers < i / 4)
-            return 0
-        end
-    end
-    n_inliers
-end
-
-function compute_projections(E)
-    W = SMatrix{3, 3, Float64}(
-         0, 1, 0,
-        -1, 0, 0,
-         0, 0, 1,
-    )
-    F = svd(E; full=true)
-
-    R1 = F.U * W * F.Vt
-    R2 = F.U * W' * F.Vt
-    t = F.U[:, 3]
-
-    P1 = get_transformation(R1, t)
-    P2 = get_transformation(R1, -t)
-    P3 = get_transformation(R2, t)
-    P4 = get_transformation(R2, -t)
-
-    P1, P2, P3, P4
-end
-
-"""
-Triangulate point given its two projection coordinates and projection matrices.
-
-# Arguments
-- `p1`: Pixel coordinates of a point in `(x, y)` format in the first view.
-- `p2`: Pixel coordinates of a point in `(x, y)` format in the second view.
-- `P1`: Projection matrix for the first view.
-- `P2`: Projection matrix for the second view.
-
-# Returns:
-    Triangulated point in `(x, y, z, 1)` format.
-"""
-function triangulate_point(p1, p2, P1, P2)
-    x1, y1 = p1
-    x2, y2 = p2
-    A = SMatrix{4, 4, Float64}(
-        x1*P1[3,1]-P1[1,1], y1*P1[3,1]-P1[2,1], x2*P2[3,1]-P2[1,1], y2*P2[3,1]-P2[2,1],
-        x1*P1[3,2]-P1[1,2], y1*P1[3,2]-P1[2,2], x2*P2[3,2]-P2[1,2], y2*P2[3,2]-P2[2,2],
-        x1*P1[3,3]-P1[1,3], y1*P1[3,3]-P1[2,3], x2*P2[3,3]-P2[1,3], y2*P2[3,3]-P2[2,3],
-        x1*P1[3,4]-P1[1,4], y1*P1[3,4]-P1[2,4], x2*P2[3,4]-P2[1,4], y2*P2[3,4]-P2[2,4],
-    )
-    svd(A; full=true).V[:, 4]
-end
-
-get_transformation(R, t) = SMatrix{3, 4, Float64}(R..., t...)
-
-trace(p) = mapreduce(mi -> tr(coefficient.(p, mi)) * mi, +, monomials(p[1]))
-
-"""
-input -- 10-element vector
-"""
-function subtr(v1, v2)
-    v1 = [0, v1[1:3]..., 0, v1[4:6]..., 0, v1[7:10]...]
-    v2 = [v2[1:3]..., 0, v2[4:6]..., 0, v2[7:10]..., 0]
-    v1 .- v2
 end
 
 end
