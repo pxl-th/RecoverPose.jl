@@ -24,44 +24,36 @@ function five_point(points1, points2, K1, K2)
 
     # TODO move this to outside of the function.
     # Points are now in `(x, y)` format.
-    p1 = Matrix{Float64}(undef, length(points1), 2)
-    p2 = Matrix{Float64}(undef, length(points1), 2)
-    # TODO get rid of either p1 of pp1 (same for p2).
-    pp1 = Vector{SVector{2, Float64}}(undef, length(points1))
-    pp2 = Vector{SVector{2, Float64}}(undef, length(points1))
+    p1 = Vector{SVector{2, Float64}}(undef, length(points1))
+    p2 = Vector{SVector{2, Float64}}(undef, length(points1))
     for i in 1:length(points1)
-        pp1[i] = SVector{2, Float64}(
+        p1[i] = SVector{2, Float64}(
             (points1[i][2] - K1[1, 3]) / K1[1, 1],
             (points1[i][1] - K1[2, 3]) / K1[2, 2],
         )
-        pp2[i] = SVector{2, Float64}(
+        p2[i] = SVector{2, Float64}(
             (points2[i][2] - K2[1, 3]) / K2[1, 1],
             (points2[i][1] - K2[2, 3]) / K2[2, 2],
         )
-        p1[i, :] = pp1[i]
-        p2[i, :] = pp2[i]
     end
 
     F = Matrix{Float64}(undef, length(points1), 9)
     for i in 1:length(points1)
-        F[i, 1] = p2[i, 1] * p1[i, 1] # x2 * x1
-        F[i, 2] = p2[i, 1] * p1[i, 2] # x2 * y1
-        F[i, 3] = p2[i, 1]            # x2
+        F[i, 1] = p2[i][1] * p1[i][1] # x2 * x1
+        F[i, 2] = p2[i][1] * p1[i][2] # x2 * y1
+        F[i, 3] = p2[i][1]            # x2
 
-        F[i, 4] = p2[i, 2] * p1[i, 1] # y2 * x1
-        F[i, 5] = p2[i, 2] * p1[i, 2] # y2 * y1
-        F[i, 6] = p2[i, 2]             # y2
+        F[i, 4] = p2[i][2] * p1[i][1] # y2 * x1
+        F[i, 5] = p2[i][2] * p1[i][2] # y2 * y1
+        F[i, 6] = p2[i][2]            # y2
 
-        F[i, 7] = p1[i, 1]             # x1
-        F[i, 8] = p1[i, 2]             # y1
-
-        F[i, 9] = 1.0
+        F[i, 7] = p1[i][1]            # x1
+        F[i, 8] = p1[i][2]            # y1
+        F[i, 9] = 1
     end
 
-    # TODO do we need V or Vt?
     V = svd(F; full=true).V
 
-    # TODO do we need to transpose?
     E1 = SMatrix{3, 3, Float64}(
         V[1, 6], V[4, 6], V[7, 6],
         V[2, 6], V[5, 6], V[8, 6],
@@ -111,8 +103,8 @@ function five_point(points1, points2, K1, K2)
 
     mat_part = (e1 * e2) * e1
     trace_part = trace(e1 * e2) * e1
-    # TODO is this correct?
-    row33 = mat_part - 0.5 * trace_part
+
+    row33 = mat_part .- 0.5 .* trace_part
     row9 = mapreduce(
         mi -> reshape(coefficient.(row33, mi), 9),
         hcat, monomials(row33[1]),
@@ -144,7 +136,7 @@ function five_point(points1, points2, K1, K2)
     P1 = B23 * B12 - B13 * B22
     P2 = B13 * B21 - B23 * B11
     P3 = B11 * B22 - B12 * B21
-    det_B = P1 * B32 + P2 * B32 + P3 * B33
+    det_B = P1 * B31 + P2 * B32 + P3 * B33
     # Normalize the coefficient of the highest order.
     if (coefficient(det_B, z^10) ≉ 0)
         det_B = det_B / coefficient(det_B, z^10)
@@ -176,8 +168,9 @@ function five_point(points1, points2, K1, K2)
     P_ref = SMatrix{4, 4, Float64}(I)
     for i in 1:length(sol_z)
         E = @. sol_x[i] * E1 + sol_y[i] * E2 + sol_z[i] * E3 + E4
+
         for P in compute_projections(E)
-            n_inliers = chirality_test(pp1, pp2, P_ref, P)
+            n_inliers = chirality_test(p1, p2, P_ref, P)
             if n_inliers > best_inliers
                 best_inliers = n_inliers
                 E_res = E
@@ -202,7 +195,7 @@ function chirality_test(p1, p2, P1, P2)
         s = pt3d[4] < 0 ? -1 : 1
         s1 = x1[3] < 0 ? -1 : 1
         s2 = x2[3] < 0 ? -1 : 1
-        if (s1 + s2) * s == 2
+        if s * (s1 + s2) == 2
             n_inliers += 1
         end
         # If there are only 5 points, solution must be perfect, otherwise fail.
@@ -219,7 +212,7 @@ function compute_projections(E)
     W = SMatrix{3, 3, Float64}(
          0, 1, 0,
         -1, 0, 0,
-         0, 0, 0,
+         0, 0, 1,
     )
     F = svd(E; full=true)
 
@@ -259,13 +252,7 @@ function triangulate_point(p1, p2, P1, P2)
     svd(A; full=true).V[:, 4]
 end
 
-function get_transformation(R, t)
-    SMatrix{3, 4, Float64}(
-        R[1, 1], R[1, 2], R[1, 3], t[1],
-        R[2, 1], R[2, 2], R[2, 3], t[2],
-        R[3, 1], R[3, 2], R[3, 3], t[3],
-    )
-end
+get_transformation(R, t) = SMatrix{3, 4, Float64}(R..., t...)
 
 trace(p) = mapreduce(mi -> tr(coefficient.(p, mi)) * mi, +, monomials(p[1]))
 
