@@ -10,7 +10,8 @@ Five-point algorithm for computing an essential matrix from a set of correspondi
 
 ### Use
 
-- Pass along with `K`:
+- Pass points along with intrinsics:
+
 Pass `Vector{SVector{2}}` points for both views along with their intrinsic matrices.
 **NOTE** that in this case points should be in `(y, x)` format.
 
