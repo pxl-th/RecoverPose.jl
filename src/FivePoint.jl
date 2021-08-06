@@ -28,7 +28,6 @@ function five_point(points1, points2, K1, K2)
         "Instead, number of points is $(length(points1)) & $(length(points2))."
     )
 
-    # TODO move this to outside of the function.
     # Points are now in `(x, y)` format.
     p1 = Vector{SVector{2, Float64}}(undef, length(points1))
     p2 = Vector{SVector{2, Float64}}(undef, length(points1))
