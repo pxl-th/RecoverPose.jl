@@ -1,6 +1,7 @@
 module FivePoint
 export five_point
 
+using Random
 using LinearAlgebra
 using StaticArrays
 using TypedPolynomials
@@ -8,7 +9,6 @@ using MultivariatePolynomials
 using RowEchelon
 
 @polyvar x y z
-const REORDER = [1,7,2,4,3,11,8,14,5,12,6,13,17,9,15,18,10,16,19,20]
 
 include("utils.jl")
 include("chirality.jl")
@@ -135,10 +135,10 @@ Test candidates for the essential matrix and return the best candidate.
 """
 function test_candidates(p1, p2, E1, E2, E3, E4, sol_x, sol_y, sol_z)
     # Perform chirality testing to select best E candidate.
-    best_inliers = nothing
     best_n_inliers = 0
-    E_res = nothing
-    P_res = nothing
+    best_inliers = Vector{Bool}[]
+    E_res = SMatrix{3, 3, Float64}[]
+    P_res = SMatrix{3, 4, Float64}[]
 
     P_ref = SMatrix{4, 4, Float64}(I)
     for i in 1:length(sol_z)
@@ -146,16 +146,22 @@ function test_candidates(p1, p2, E1, E2, E3, E4, sol_x, sol_y, sol_z)
 
         for P in compute_projections(E)
             n_inliers, inliers = chirality_test(p1, p2, P_ref, P)
-            n_inliers ≤ best_n_inliers && continue
+            if n_inliers < best_n_inliers
+                continue
+            elseif n_inliers > best_n_inliers
+                E_res |> empty!
+                P_res |> empty!
+                best_inliers |> empty!
+            end
 
             best_n_inliers = n_inliers
-            best_inliers = inliers
-            E_res = E
-            P_res = P
+            push!(best_inliers, inliers)
+            push!(P_res, P)
+            push!(E_res, E)
         end
     end
 
-    E_res, P_res, best_inliers
+    E_res, P_res, best_inliers, best_n_inliers
 end
 
 end

@@ -6,8 +6,7 @@ using Random
 
 Random.seed!(0)
 
-@testset "Identity K. Random transformation." begin
-    K = SMatrix{3, 3}(I)
+function get_random_transform()
     # Rotation angle in radians.
     θ = (rand() - 0.5) * π * 360 / 180
     # Rotation axis.
@@ -21,43 +20,64 @@ Random.seed!(0)
     )
     # Rotation matrix (Rodrigues formula).
     R = SMatrix{3, 3}(I) .+ sin(θ) .* v .+ (1 - cos(θ)) .* (v * v)
-    # Translation vector.
     t = SVector{3}(((rand(2) .- 0.5) ./ 10)..., 1)
+    R, t
+end
 
+function get_target_E(R, t)
     # Compute essential matrix with R & t.
     tc = SMatrix{3, 3, Float64}(
         0, t[3], -t[2],
         -t[3], 0, t[1],
         t[2], -t[1], 0,
     )
-    E_target = tc * R
-    E_target /= E_target[3, 3]
+    E = tc * R
+    E /= E[3, 3]
+end
+
+@testset "Perfect Solution" begin
+    K = SMatrix{3, 3}(I)
+    R, t = get_random_transform()
+    E_target = get_target_E(R, t)
 
     # Projection matrix.
     P_target = FivePoint.get_transformation(R, t)
-    p1 = K * FivePoint.get_transformation(SMatrix{3, 3}(I), zeros(SVector{3}))
-    p2 = K * P_target
+    P1 = K * FivePoint.get_transformation(SMatrix{3, 3}(I), zeros(SVector{3}))
+    P2 = K * P_target
 
-    # Generate random points in `(x, y, z, w)` format.
-    n_points = 5
-    x = rand(4, n_points)
-    x[4, :] .= 1
+    for n_points in (5, 50, 500)
+        # Generate random points in `(x, y, z, w)` format.
+        x = rand(4, n_points)
+        x[4, :] .= 1
 
-    x1h = p1 * x
-    x2h = p2 * x
-    x1h ./= reshape(x1h[3, :], (1, n_points))
-    x2h ./= reshape(x2h[3, :], (1, n_points))
-    x1 = x1h[1:2, :]
-    x2 = x2h[1:2, :]
+        x1h = P1 * x
+        x2h = P2 * x
+        x1h ./= reshape(x1h[3, :], (1, n_points))
+        x2h ./= reshape(x2h[3, :], (1, n_points))
+        x1 = x1h[1:2, :]
+        x2 = x2h[1:2, :]
 
-    # Convert to `(y, x)` format.
-    x1 = [SVector{2}(x1[2, i], x1[1, i]) for i in 1:n_points]
-    x2 = [SVector{2}(x2[2, i], x2[1, i]) for i in 1:n_points]
+        # Convert to `(y, x)` format.
+        x1 = [SVector{2}(x1[2, i], x1[1, i]) for i in 1:n_points]
+        x2 = [SVector{2}(x2[2, i], x2[1, i]) for i in 1:n_points]
 
-    E_res, P_res, inliers = five_point(x1, x2, K, K)
-    E_res /= E_res[3, 3]
+        E_res, P_res, inliers, n_inliers = five_point(x1, x2, K, K)
+        
+        correct_solution_id = 0
+        for (i, E) in enumerate(E_res)
+            if all(isapprox.(E, E_target; atol=1e-3))
+                correct_solution_id = i
+                break
+            end
+        end
 
-    @test all(isapprox.(P_res, P_target; atol=1e-2))
-    @test all(E_res .≈ E_target)
-    @test sum(inliers) == n_points
+        @test correct_solution_id != 0
+        if correct_solution_id != 0
+            E = E_res[correct_solution_id] ./ E_res[correct_solution_id][3, 3]
+            @test all(isapprox.(E, E_target; atol=1e-3))
+            @test all(isapprox.(P_res[correct_solution_id], P_target; atol=1e-3))
+            @test sum(inliers[correct_solution_id]) == n_points
+            @test n_inliers == n_points
+        end
+    end
 end

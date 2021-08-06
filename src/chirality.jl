@@ -59,9 +59,11 @@ function compute_projections(E)
     )
     F = svd(E; full=true)
 
+    t = F.U[:, 3]
     R1 = F.U * W * F.Vt
     R2 = F.U * W' * F.Vt
-    t = F.U[:, 3]
+    det(R1) < 0 && (R1 *= -1)
+    det(R2) < 0 && (R2 *= -1)
 
     P1 = get_transformation(R1, t)
     P2 = get_transformation(R1, -t)

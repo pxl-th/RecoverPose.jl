@@ -74,6 +74,8 @@ function compute_rref(E1, E2, E3, E4)
     )
 
     M = vcat(coefficients(row1)', row9) # 10x20 matrix.
-    Base.permutecols!!(M, REORDER)
+
+    order = [1,7,2,4,3,11,8,14,5,12,6,13,17,9,15,18,10,16,19,20]
+    Base.permutecols!!(M, order)
     rref(M)
 end
