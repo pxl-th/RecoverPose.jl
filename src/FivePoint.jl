@@ -1,5 +1,5 @@
 module FivePoint
-export five_point
+export five_point, five_point_ransac
 
 using Random
 using LinearAlgebra
@@ -12,6 +12,23 @@ using RowEchelon
 
 include("utils.jl")
 include("chirality.jl")
+
+function pre_divide(points1, points2, K1, K2)
+    # Points are now in `(x, y)` format.
+    p1 = Vector{SVector{2, Float64}}(undef, length(points1))
+    p2 = Vector{SVector{2, Float64}}(undef, length(points1))
+    for i in 1:length(points1)
+        p1[i] = SVector{2, Float64}(
+            (points1[i][2] - K1[1, 3]) / K1[1, 1],
+            (points1[i][1] - K1[2, 3]) / K1[2, 2],
+        )
+        p2[i] = SVector{2, Float64}(
+            (points2[i][2] - K2[1, 3]) / K2[1, 1],
+            (points2[i][1] - K2[2, 3]) / K2[2, 2],
+        )
+    end
+    p1, p2
+end
 
 """
 - `points1`:
@@ -27,21 +44,12 @@ function five_point(points1, points2, K1, K2)
         "and both vectors should have the same amount of points. " *
         "Instead, number of points is $(length(points1)) & $(length(points2))."
     )
+    five_point(pre_divide(points1, points2, K1, K2)...)
+end
 
-    # Points are now in `(x, y)` format.
-    p1 = Vector{SVector{2, Float64}}(undef, length(points1))
-    p2 = Vector{SVector{2, Float64}}(undef, length(points1))
-    for i in 1:length(points1)
-        p1[i] = SVector{2, Float64}(
-            (points1[i][2] - K1[1, 3]) / K1[1, 1],
-            (points1[i][1] - K1[2, 3]) / K1[2, 2],
-        )
-        p2[i] = SVector{2, Float64}(
-            (points2[i][2] - K2[1, 3]) / K2[1, 1],
-            (points2[i][1] - K2[2, 3]) / K2[2, 2],
-        )
-    end
-    five_point(p1, p2)
+function five_point(p1, p2)
+    candidates = five_point_candidates(p1, p2)
+    select_candidates(candidates, p1, p2)
 end
 
 """
@@ -54,7 +62,7 @@ Compute essential matrix using Five-Point algorithm.
 # Returns:
     Essential matrix, projection matrix and boolean vector indicating inliers.
 """
-function five_point(p1, p2)
+function five_point_candidates(p1, p2)
     V = null_space(p1, p2)
 
     E1 = SMatrix{3, 3, Float64}(
@@ -127,13 +135,13 @@ function five_point(p1, p2)
     sol_x = P1z ./ P3z
     sol_y = P2z ./ P3z
 
-    test_candidates(p1, p2, E1, E2, E3, E4, sol_x, sol_y, sol_z)
+    [@. sx*E1+sy*E2+sz*E3+E4 for (sx,sy,sz) in zip(sol_x,sol_y,sol_z)]
 end
 
 """
 Test candidates for the essential matrix and return the best candidate.
 """
-function test_candidates(p1, p2, E1, E2, E3, E4, sol_x, sol_y, sol_z)
+function select_candidates(candidates, p1, p2)
     # Perform chirality testing to select best E candidate.
     best_n_inliers = 0
     best_inliers = Vector{Bool}[]
@@ -141,9 +149,7 @@ function test_candidates(p1, p2, E1, E2, E3, E4, sol_x, sol_y, sol_z)
     P_res = SMatrix{3, 4, Float64}[]
 
     P_ref = SMatrix{4, 4, Float64}(I)
-    for i in 1:length(sol_z)
-        E = @. sol_x[i] * E1 + sol_y[i] * E2 + sol_z[i] * E3 + E4
-
+    for E in candidates
         for P in compute_projections(E)
             n_inliers, inliers = chirality_test(p1, p2, P_ref, P)
             if n_inliers < best_n_inliers
@@ -161,7 +167,9 @@ function test_candidates(p1, p2, E1, E2, E3, E4, sol_x, sol_y, sol_z)
         end
     end
 
-    E_res, P_res, best_inliers, best_n_inliers
+    best_n_inliers, (E_res, P_res, best_inliers)
 end
+
+include("ransac.jl")
 
 end

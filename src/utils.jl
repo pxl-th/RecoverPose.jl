@@ -40,7 +40,6 @@ end
 
 function compute_rref(E1, E2, E3, E4)
     # One equation from rank constraint.
-    # Coefficients.
     c11 = E1[1, 1] * x + E2[1, 1] * y + E3[1, 1] * z + E4[1, 1]
     c12 = E1[1, 2] * x + E2[1, 2] * y + E3[1, 2] * z + E4[1, 2]
     c13 = E1[1, 3] * x + E2[1, 3] * y + E3[1, 3] * z + E4[1, 3]
@@ -72,7 +71,6 @@ function compute_rref(E1, E2, E3, E4)
         mi -> reshape(coefficient.(row33, mi), 9),
         hcat, monomials(row33[1]),
     )
-
     M = vcat(coefficients(row1)', row9) # 10x20 matrix.
 
     order = [1,7,2,4,3,11,8,14,5,12,6,13,17,9,15,18,10,16,19,20]

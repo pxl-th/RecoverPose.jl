@@ -61,10 +61,31 @@ end
         x1 = [SVector{2}(x1[2, i], x1[1, i]) for i in 1:n_points]
         x2 = [SVector{2}(x2[2, i], x2[1, i]) for i in 1:n_points]
 
-        E_res, P_res, inliers, n_inliers = five_point(x1, x2, K, K)
-        
+        n_inliers, (E_res, P_res, inliers) = five_point(x1, x2, K, K)
         correct_solution_id = 0
         for (i, E) in enumerate(E_res)
+            E /= E[3, 3]
+            if all(isapprox.(E, E_target; atol=1e-3))
+                correct_solution_id = i
+                break
+            end
+        end
+
+        @test correct_solution_id != 0
+        if correct_solution_id != 0
+            E = E_res[correct_solution_id] ./ E_res[correct_solution_id][3, 3]
+            @test all(isapprox.(E, E_target; atol=1e-3))
+            @test all(isapprox.(P_res[correct_solution_id], P_target; atol=1e-3))
+            @test sum(inliers[correct_solution_id]) == n_points
+            @test n_inliers == n_points
+        end
+
+        # Test 5pt RANSAC.
+
+        n_inliers, (E_res, P_res, inliers) = five_point_ransac(x1, x2, K, K)
+        correct_solution_id = 0
+        for (i, E) in enumerate(E_res)
+            E /= E[3, 3]
             if all(isapprox.(E, E_target; atol=1e-3))
                 correct_solution_id = i
                 break
