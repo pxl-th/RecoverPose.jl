@@ -32,18 +32,3 @@ function ransac(
 
     best_n_inliers, best_M
 end
-
-function five_point_ransac(p1, p2; ransac_kwargs...)
-    ransac(
-        (p1, p2), five_point_candidates, select_candidates, 5;
-        ransac_kwargs...
-    )
-end
-
-function five_point_ransac(p1, p2, K1, K2; ransac_kwargs...)
-    ransac(
-        pre_divide(p1, p2, K1, K2),
-        five_point_candidates, select_candidates, 5;
-        ransac_kwargs...
-    )
-end
