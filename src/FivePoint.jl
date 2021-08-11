@@ -1,5 +1,6 @@
 module FivePoint
-export five_point, five_point_ransac, p3p
+export five_point, five_point_ransac
+export p3p_select_model, p3p, p3p_ransac
 
 using Random
 using LinearAlgebra
