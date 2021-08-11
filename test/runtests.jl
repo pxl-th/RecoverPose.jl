@@ -6,6 +6,8 @@ using Random
 
 Random.seed!(0)
 
+include("p3p.jl")
+
 function get_random_transform()
     # Rotation angle in radians.
     θ = (rand() - 0.5) * π * 360 / 180

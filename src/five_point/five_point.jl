@@ -38,16 +38,22 @@ function five_point(p1, p2)
 end
 
 function five_point_ransac(p1, p2; ransac_kwargs...)
+    sample_selection(sample_ids) = (p1[sample_ids], p2[sample_ids])
+    rank(models) = select_candidates(models, p1, p2)
     ransac(
-        (p1, p2), five_point_candidates, select_candidates, 5;
+        sample_selection, five_point_candidates, rank,
+        length(p1), 5;
         ransac_kwargs...
     )
 end
 
 function five_point_ransac(p1, p2, K1, K2; ransac_kwargs...)
+    p1, p2 = pre_divide(p1, p2, K1, K2)
+    sample_selection(sample_ids) = (p1[sample_ids], p2[sample_ids])
+    rank(models) = select_candidates(models, p1, p2)
     ransac(
-        pre_divide(p1, p2, K1, K2),
-        five_point_candidates, select_candidates, 5;
+        sample_selection, five_point_candidates, rank,
+        length(p1), 5;
         ransac_kwargs...
     )
 end
