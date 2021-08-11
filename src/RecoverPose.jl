@@ -1,6 +1,6 @@
-module FivePoint
+module RecoverPose
 export five_point, five_point_ransac
-export p3p_select_model, p3p, p3p_ransac
+export p3p_select_model, p3p, p3p_ransac, pre_divide_normalize
 
 using Random
 using LinearAlgebra

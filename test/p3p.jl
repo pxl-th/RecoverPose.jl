@@ -22,7 +22,7 @@ end
 
     R = SMatrix{3, 3, Float64}(I)
     t = SVector{3, Float64}(1, 2, 3)
-    P_target = FivePoint.get_transformation(R', -t)
+    P_target = RecoverPose.get_transformation(R', -t)
 
     max_res = 2 * min(K[1, 3], K[2, 3])
     pmin = SVector{2}(1, 1)
@@ -30,7 +30,7 @@ end
     δ = pmax - pmin
 
     pixels = [floor.(rand(SVector{2, Float64}) .* δ .+ pmin) for i in 1:n_points]
-    pdn_pixels = FivePoint.pre_divide_normalize(pixels, K, :xy)
+    pdn_pixels = pre_divide_normalize(pixels, K, :xy)
     points = backproject_transform(pixels, K_inv, R, t)
     points = [p .+ rand(SVector{3, Float64}) .* noise_scale for p in points]
 
@@ -75,7 +75,7 @@ end
 
     R = SMatrix{3, 3, Float64}(I)
     t = SVector{3, Float64}(1, 2, 3)
-    P_target = FivePoint.get_transformation(R', -t)
+    P_target = RecoverPose.get_transformation(R', -t)
 
     max_res = 2 * min(K[1, 3], K[2, 3])
     pmin = SVector{2}(1, 1)
@@ -83,7 +83,7 @@ end
     δ = pmax - pmin
 
     pixels = [floor.(rand(SVector{2, Float64}) .* δ .+ pmin) for i in 1:n_points]
-    pdn_pixels = FivePoint.pre_divide_normalize(pixels, K, :xy)
+    pdn_pixels = pre_divide_normalize(pixels, K, :xy)
     points = backproject_transform(pixels, K_inv, R, t)
     points = [p .+ rand(SVector{3, Float64}) .* noise_scale for p in points]
 

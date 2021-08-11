@@ -1,8 +1,9 @@
 using Test
 using LinearAlgebra
-using StaticArrays
-using FivePoint
 using Random
+using StaticArrays
+
+using RecoverPose
 
 Random.seed!(0)
 
@@ -43,8 +44,8 @@ end
     E_target = get_target_E(R, t)
 
     # Projection matrix.
-    P_target = FivePoint.get_transformation(R, t)
-    P1 = K * FivePoint.get_transformation(SMatrix{3, 3}(I), zeros(SVector{3}))
+    P_target = RecoverPose.get_transformation(R, t)
+    P1 = K * RecoverPose.get_transformation(SMatrix{3, 3}(I), zeros(SVector{3}))
     P2 = K * P_target
 
     for n_points in (5, 50, 500)

@@ -1,4 +1,4 @@
-name = "FivePoint"
+name = "RecoverPose"
 uuid = "4c983967-3530-4695-9d8b-d2465029e2f3"
 authors = ["Anton Smirnov <anton.smn@protonmail.com>"]
 version = "0.1.0"
