@@ -1,27 +1,44 @@
 """
-pixels: K^-1 [u v 1]^T / ||K^-1 [u v 1]^T||
+Recover pose [R|t] using P3P algorithm.
 
 # Arguments:
-- `points`
+- `points::Vector{SVector{3, Float64}}`: 3D points in `(x, y, z)`
+- `pixels::Vector{SVector{3, Float64}}`:
+    Corresponding projections onto image plane,
+    predivided by `K` intrinsics and normalized.
+    E.g.: Ki = int(K); p = Ki [x, y, 1]; p /= norm(p)
+- `K::SMatrix{3, 3, Float64}`: Camera intrinsics.
+
+# Returns:
+    `Vector{SMatrix{3, 4, Float64}}` vector of up to 4 possible solutions.
+    Each element is a projection matrix `P = K * [R|t]`.
+    To get pure transformation matrix, multiply `P` by `inv(K)`.
+
+# References:
+```
+Link: https://cmp.felk.cvut.cz/~pajdla/gvg/GVG-2016-Lecture.pdf
+chapter: 7.3 Calibrated camera pose computation.
+pages: 51-59
+```
 """
 function p3p(
     points::Vector{SVector{3, Float64}},
     pixels::Vector{SVector{3, Float64}},
     K::SMatrix{3, 3, Float64},
 )
+    models = SMatrix{3, 4, Float64}[]
     ϵ = 1e-4
 
     d12 = norm(points[1] .- points[2])
     d13 = norm(points[1] .- points[3])
     d23 = norm(points[2] .- points[3])
-    (d12 < ϵ || d13 < ϵ || d23 < ϵ) && return nothing
+    (d12 < ϵ || d13 < ϵ || d23 < ϵ) && return models
 
     sd12, sd13, sd23 = d12^2, d13^2, d23^2
 
     α12 = pixels[1] ⋅ pixels[2]
     α13 = pixels[1] ⋅ pixels[3]
     α23 = pixels[2] ⋅ pixels[3]
-    @show α12, α13, α23
 
     # Compute coefficients of a polynomial [7.80].
     m1, m2 = sd12, sd13 - sd23
@@ -32,8 +49,6 @@ function p3p(
 
     P = (m1 * q2 - m2 * q1)^2 - (m1 * p2 - m2 * p1) * (q1 * p2 - q2 * p1)
     P_roots = P |> Polynomials.roots
-
-    models = SMatrix{3, 4, Float64}[]
 
     for η12 in P_roots
         isreal(η12) || continue
@@ -77,51 +92,62 @@ function p3p(
     models
 end
 
-Random.seed!(0)
+function reprojection_error(
+    models::Vector{SMatrix{3, 4, Float64}},
+    pixels::Vector{SVector{2, T}},
+    points::Vector{SVector{3, Float64}};
+    threshold::Real = 1.0,
+) where T <: Real
+    best_n_inliers = 0
+    best_error = maxintfloat()
+    best_projection = nothing
+    best_inliers = nothing
 
-function main()
-    n = 3
-    
-    fcmin, fcmax = 1e-3, 100
-    K = SMatrix{3, 3, Float64}(
-        rand() * (fcmax - fcmin) + fcmin, 0, 0,
-        0, rand() * (fcmax - fcmin) + fcmin, 0,
-        rand() * (fcmax - fcmin) + fcmin, rand() * (fcmax - fcmin) + fcmin, 1,
-    )
-    K_inv = K |> inv
-    @info "K"
-    display(K); println()
+    for P in models
+        avg_error = 0.0
+        inliers = fill(false, length(points))
+        n_inliers = 0
+        for (i, (pixel, point)) in enumerate(zip(pixels, points))
+            projected = P[1:3, 1:3] * point + P[1:3, 4]
+            projected = projected[1:2] ./ projected[3]
+            error = norm(pixel .- projected)
+            avg_error += error
+            error < threshold && (inliers[i] = true; n_inliers += 1;)
+        end
+        avg_error /= length(points)
 
-    R = SMatrix{3, 3, Float64}(I)
-    t = SVector{3, Float64}(1, 2, 1)
-
-    pmin = 1
-    pmax = 2 * min(K[1, 3], K[2, 3])
-
-    point_cloud = SVector{3, Float64}[]
-    projected = SVector{3, Float64}[]
-    for i in 1:3
-        px = SVector{3, Float64}(
-            rand() * (pmax - pmin) + pmin,
-            rand() * (pmax - pmin) + pmin, 1,
-        )
-
-        p = K_inv * px
-        p = R' * p + t
-
-        px = K_inv * px
-        px /= norm(px)
-
-        push!(point_cloud, p)
-        push!(projected, px)
+        if avg_error < best_error
+            best_projection = P
+            best_inliers = inliers
+            best_n_inliers = n_inliers
+            best_error = avg_error
+        end
     end
 
-    models = p3p(point_cloud, projected, K)
-    for m in models
-        @info "==============="
-        m = K_inv * m
-        display(m); println()
-    end
+    best_n_inliers, (best_projection, best_inliers, best_error)
 end
 
-main()
+"""
+TODO:
++ reprojection error
+- ransac wrapper
++ tests
+"""
+
+"""
+xy - format
+"""
+function pre_divide_normalize(
+    pixels::Vector{SVector{2, T}}, K::SMatrix{3, 3, Float64},
+) where T <: Real
+    res = Vector{SVector{3, Float64}}(undef, length(pixels))
+    for (i, px) in enumerate(pixels)
+        p = SVector{3, Float64}(
+            (px[1] - K[1, 3]) / K[1, 1],
+            (px[2] - K[2, 3]) / K[2, 2], 1,
+        )
+        res[i] = p / norm(p)
+    end
+    res
+end
+
