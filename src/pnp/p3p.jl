@@ -1,7 +1,14 @@
 """
 pixels: K^-1 [u v 1]^T / ||K^-1 [u v 1]^T||
+
+# Arguments:
+- `points`
 """
-function p3p(points, pixels, K)
+function p3p(
+    points::Vector{SVector{3, Float64}},
+    pixels::Vector{SVector{3, Float64}},
+    K::SMatrix{3, 3, Float64},
+)
     ϵ = 1e-4
 
     d12 = norm(points[1] .- points[2])
@@ -14,6 +21,7 @@ function p3p(points, pixels, K)
     α12 = pixels[1] ⋅ pixels[2]
     α13 = pixels[1] ⋅ pixels[3]
     α23 = pixels[2] ⋅ pixels[3]
+    @show α12, α13, α23
 
     # Compute coefficients of a polynomial [7.80].
     m1, m2 = sd12, sd13 - sd23
@@ -28,6 +36,8 @@ function p3p(points, pixels, K)
     models = SMatrix{3, 4, Float64}[]
 
     for η12 in P_roots
+        isreal(η12) || continue
+        η12 = η12 |> real
         η12 ≤ 0 && continue
         # Evaluate [7.89] at η12 to get η13.
         η13 = (m1 * q2 - m2 * q1)(η12) / (m1 * p2 - m2 * p1)(η12)
@@ -52,19 +62,17 @@ function p3p(points, pixels, K)
         z3z1 = z3 × z1
 
         zw2 = @. (points[2] - points[1]) / d12
-        zw3 = @. (points[3] - points[1]) / d31
+        zw3 = @. (points[3] - points[1]) / d13
         zw1 = zw2 × zw3; zw1 /= norm(zw1)
         zw3zw1 = zw3 × zw1
 
         # Recover rotation R [7.130 - 7.134].
         Z = SMatrix{3, 3, Float64}(z1..., z2..., z3z1...)
         ZW = SMatrix{3, 3, Float64}(zw1..., zw2..., zw3zw1...)
-        # TODO check if this is correct or should:
-        # https://github.com/opencv/opencv/blob/68d15fc62edad980f1ffa15ee478438335f39cc3/modules/calib3d/src/usac/utils.cpp#L138
-        R = Z * int(ZW)
+        R = Z * inv(ZW)
         KR = K * R
-        t = -KR * (points[1] - R' * nx1)
-        push!(models, SMatrix{3, 4, Float64}(KR..., t...))
+        Kt = -KR * (points[1] - R' * nx1)
+        push!(models, SMatrix{3, 4, Float64}(KR..., Kt...))
     end
     models
 end
@@ -74,21 +82,46 @@ Random.seed!(0)
 function main()
     n = 3
     
-    pmin, pmax = SVector{3}(-1, -1, 5), SVector{3}(1, 1, 10)
-    point_cloud = [rand(SVector{3, Float64}) .* (pmax .- pmin) .+ pmin for _ in 1:n]
-    
     fcmin, fcmax = 1e-3, 100
     K = SMatrix{3, 3, Float64}(
         rand() * (fcmax - fcmin) + fcmin, 0, 0,
         0, rand() * (fcmax - fcmin) + fcmin, 0,
         rand() * (fcmax - fcmin) + fcmin, rand() * (fcmax - fcmin) + fcmin, 1,
     )
-
+    K_inv = K |> inv
     @info "K"
     display(K); println()
 
-    models = p3p(point_cloud, point_cloud, K)
-    @info models
+    R = SMatrix{3, 3, Float64}(I)
+    t = SVector{3, Float64}(1, 2, 1)
+
+    pmin = 1
+    pmax = 2 * min(K[1, 3], K[2, 3])
+
+    point_cloud = SVector{3, Float64}[]
+    projected = SVector{3, Float64}[]
+    for i in 1:3
+        px = SVector{3, Float64}(
+            rand() * (pmax - pmin) + pmin,
+            rand() * (pmax - pmin) + pmin, 1,
+        )
+
+        p = K_inv * px
+        p = R' * p + t
+
+        px = K_inv * px
+        px /= norm(px)
+
+        push!(point_cloud, p)
+        push!(projected, px)
+    end
+
+    models = p3p(point_cloud, projected, K)
+    for m in models
+        @info "==============="
+        m = K_inv * m
+        display(m); println()
+    end
 end
 
 main()
