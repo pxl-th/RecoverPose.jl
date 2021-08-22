@@ -26,25 +26,26 @@ end
 p1 & p2 in x, y format, pre-divided by K
 """
 function chirality_test(p1, p2, P1, P2)
+    threshold = 50
     n_points = length(p1)
+    is_exact = n_points == 5
+
     n_inliers = 0
     inliers = fill(false, n_points)
 
     for i in 1:n_points
         pt3d = triangulate_point(p1[i], p2[i], P1, P2)
-        x1 = P1 * pt3d
-        x2 = P2 * pt3d
-        s = pt3d[4] < 0 ? -1 : 1
-        s1 = x1[3] < 0 ? -1 : 1
-        s2 = x2[3] < 0 ? -1 : 1
-        if s * (s1 + s2) == 2
-            n_inliers += 1
-            inliers[i] = true
+        if (pt3d[3] > 0 && pt3d[4] > 0) || (pt3d[3] < 0 && pt3d[4] < 0)
+            pt3d *= 1.0 / pt3d[4]
+            if pt3d[3] < threshold
+                x2 = P2 * pt3d
+                (0 < x2[3] < threshold) && (inliers[i] = true; n_inliers += 1;)
+            end
         end
         # If there are only 5 points, solution must be perfect, otherwise fail.
         # In other cases, there must be at least 75% inliers
         # for the solution to be considered valid.
-        if (n_points == 5 && n_inliers < i) || (n_inliers < i / 4)
+        if (is_exact && n_inliers < i) || (n_inliers < i * 0.25)
             return 0, inliers
         end
     end

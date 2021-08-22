@@ -154,7 +154,7 @@ function select_candidates(candidates, p1, p2)
     E_res = SMatrix{3, 3, Float64}[]
     P_res = SMatrix{3, 4, Float64}[]
 
-    P_ref = SMatrix{4, 4, Float64}(I)
+    P_ref = SMatrix{3, 4, Float64}(I)
     for E in candidates
         for P in compute_projections(E)
             n_inliers, inliers = chirality_test(p1, p2, P_ref, P)
