@@ -144,32 +144,50 @@ function five_point_candidates(p1, p2)
     [@. sx*E1+sy*E2+sz*E3+E4 for (sx,sy,sz) in zip(sol_x,sol_y,sol_z)]
 end
 
+function compute_essential_error(p1, p2, E, threshold)
+    threshold *= threshold
+    inliers = fill(false, length(p1))
+    n_inliers = 0
+    for i in 1:length(p1)
+        p1i = SVector{3, Float64}(p1[i]..., 1.0)
+        p2i = SVector{3, Float64}(p2[i]..., 1.0)
+
+        Ep1 = E * p1i
+        Ep2 = E' * p2i
+        error = p2i ⋅ Ep1
+        error = (error * error) / (
+            Ep1[1] * Ep1[1] + Ep1[2] * Ep1[2] +
+            Ep2[1] * Ep2[1] + Ep2[2] * Ep2[2]
+        )
+        error < threshold && (inliers[i] = true; n_inliers += 1)
+    end
+    n_inliers, inliers
+end
+
 """
 Test candidates for the essential matrix and return the best candidate.
 """
 function select_candidates(candidates, p1, p2)
     # Perform chirality testing to select best E candidate.
     best_n_inliers = 0
-    best_inliers = Vector{Bool}[]
-    E_res = SMatrix{3, 3, Float64}[]
-    P_res = SMatrix{3, 4, Float64}[]
+    best_inliers = Bool[]
+    E_res = SMatrix{3, 3, Float64}(I)
+    P_res = SMatrix{3, 4, Float64}(I)
 
     P_ref = SMatrix{3, 4, Float64}(I)
     for E in candidates
+        n_inliers, inliers = compute_essential_error(p1, p2, E, 1)
+        n_inliers < best_n_inliers && continue
+        # TODO expose threshold parameter to user
+        # TODO compute error for the E (and do the same for P3P -> reprojection)
         for P in compute_projections(E)
-            n_inliers, inliers = chirality_test(p1, p2, P_ref, P)
-            if n_inliers < best_n_inliers
-                continue
-            elseif n_inliers > best_n_inliers
-                E_res |> empty!
-                P_res |> empty!
-                best_inliers |> empty!
-            end
+            n_inliers, inliers = chirality_test(p1, p2, P_ref, P, inliers)
+            n_inliers ≤ best_n_inliers && continue
 
             best_n_inliers = n_inliers
-            push!(best_inliers, inliers)
-            push!(P_res, P)
-            push!(E_res, E)
+            best_inliers = inliers
+            E_res = E
+            P_res = P
         end
     end
 
