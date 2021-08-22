@@ -43,9 +43,6 @@ function chirality_test(p1, p2, P1, P2, inliers)
             end
         end
         # If there are only 5 points, solution must be perfect, otherwise fail.
-        # In other cases, there must be at least 75% inliers
-        # for the solution to be considered valid.
-        # if (is_exact && n_inliers < i) || (n_inliers < i * 0.25)
         is_exact && n_inliers < i && return 0, inliers
     end
     n_inliers, inliers

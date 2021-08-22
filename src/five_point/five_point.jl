@@ -178,8 +178,6 @@ function select_candidates(candidates, p1, p2)
     for E in candidates
         n_inliers, inliers = compute_essential_error(p1, p2, E, 1)
         n_inliers < best_n_inliers && continue
-        # TODO expose threshold parameter to user
-        # TODO compute error for the E (and do the same for P3P -> reprojection)
         for P in compute_projections(E)
             n_inliers, inliers = chirality_test(p1, p2, P_ref, P, inliers)
             n_inliers ≤ best_n_inliers && continue

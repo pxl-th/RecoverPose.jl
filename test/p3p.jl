@@ -30,7 +30,7 @@ end
     δ = pmax - pmin
 
     pixels = [floor.(rand(SVector{2, Float64}) .* δ .+ pmin) for i in 1:n_points]
-    pdn_pixels = pre_divide_normalize(pixels, K, :xy)
+    pdn_pixels = pre_divide_normalize(pixels, K)
     points = backproject_transform(pixels, K_inv, R, t)
     points = [p .+ rand(SVector{3, Float64}) .* noise_scale for p in points]
 
@@ -53,7 +53,7 @@ end
     @test sum(inliers) == n_inliers
     @test all(isapprox.(K_inv * KP, P_target; atol=1e-2))
 
-    n_inliers, (KP, inliers, error) = p3p_ransac(points, pixels, K, :xy)
+    n_inliers, (KP, inliers, error) = p3p_ransac(points, pixels, K)
     @test n_inliers == n_points
     @test sum(inliers) == n_inliers
     @test all(isapprox.(K_inv * KP, P_target; atol=1e-2))
@@ -83,7 +83,7 @@ end
     δ = pmax - pmin
 
     pixels = [floor.(rand(SVector{2, Float64}) .* δ .+ pmin) for i in 1:n_points]
-    pdn_pixels = pre_divide_normalize(pixels, K, :xy)
+    pdn_pixels = pre_divide_normalize(pixels, K)
     points = backproject_transform(pixels, K_inv, R, t)
     points = [p .+ rand(SVector{3, Float64}) .* noise_scale for p in points]
 
@@ -104,7 +104,7 @@ end
     @test all(isapprox.(P[1:3, 1:3], P_target[1:3, 1:3]; atol=rot_atol))
     @test all(isapprox.(P[1:3, 4], P_target[1:3, 4]; atol=t_atol))
 
-    n_inliers, (KP, inliers, error) = p3p_ransac(points, pixels, K, :xy)
+    n_inliers, (KP, inliers, error) = p3p_ransac(points, pixels, K)
     P = K_inv * KP
     @test n_inliers ≥ n_points - 10
     @test !inliers[1] && !inliers[5] && !inliers[end] && !inliers[end - 5] &&

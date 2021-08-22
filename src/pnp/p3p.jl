@@ -128,16 +128,12 @@ function p3p_select_model(
 end
 
 function pre_divide_normalize(
-    pixels::Vector{SVector{2, T}}, K::SMatrix{3, 3, Float64}, order,
+    pixels::Vector{SVector{2, T}}, K::SMatrix{3, 3, Float64},
 ) where T <: Real
     res = Vector{SVector{3, Float64}}(undef, length(pixels))
     for (i, px) in enumerate(pixels)
-        if order == :xy
-            p = SVector{3}((px[1]-K[1,3])/K[1,1], (px[2]-K[2,3])/K[2,2],1)
-        else
-            p = SVector{3}((px[2]-K[1,3])/K[1,1], (px[1]-K[2,3])/K[2,2],1)
-        end
-        res[i] = p / norm(p)
+        p = SVector{3}((px[1]-K[1,3])/K[1,1], (px[2]-K[2,3])/K[2,2],1)
+        res[i] = normalize(p)
     end
     res
 end
@@ -146,9 +142,8 @@ function p3p(
     points::Vector{SVector{3, Float64}},
     pixels::Vector{SVector{2, Float64}},
     K::SMatrix{3, 3, Float64},
-    order,
 )
-    p3p(points, pre_divide_normalize(pixels, K, order), K)
+    p3p(points, pre_divide_normalize(pixels, K), K)
 end
 
 """
@@ -157,9 +152,8 @@ Recover pose `K*[R|t]` using P3P Ransac algorithm.
 # Arguments:
 - `points::Vector{SVector{3, Float64}}`: 3D points in `(x, y, z)`
 - `pixels::Vector{SVector{2, Float64}}`:
-    Corresponding projections onto image plane either
-    in `(x, y)` or in `(y, x)` format, which you specify in `order` parameter.
-    These values, will be predivided and normalized by the intrinsic matrix.
+    Corresponding projections onto image plane in `(x, y)` format.
+    These values should be predivided and normalized by the intrinsic matrix.
     E.g.: Ki = int(K); p = Ki [x, y, 1]; p /= norm(p)
 - `pdn_pixels::Vector{SVector{3, Float64}}`:
     Corresponding projections onto image plane,
@@ -206,11 +200,9 @@ Recover pose `K*[R|t]` using P3P Ransac algorithm.
 # Arguments:
 - `points::Vector{SVector{3, Float64}}`: 3D points in `(x, y, z)`
 - `pixels::Vector{SVector{2, Float64}}`:
-    Corresponding projections onto image plane either
-    in `(x, y)` or in `(y, x)` format, which you specify in `order` parameter.
+    Corresponding projections onto image plane in `(x, y)` format.
     These values, will be predivided and normalized by the intrinsic matrix.
     E.g.: Ki = int(K); p = Ki [x, y, 1]; p /= norm(p)
-- `order::Symbol`: Order of the pixels, either `:xy` or `:yx` is accepted.
 - `K::SMatrix{3, 3, Float64}`: Camera intrinsics.
 - `threshold::Real`:
     Maximum distance in pixels between projected point and its target pixel,
@@ -232,10 +224,9 @@ function p3p_ransac(
     points::Vector{SVector{3, Float64}},
     pixels::Vector{SVector{2, Float64}},
     K::SMatrix{3, 3, Float64},
-    order::Symbol;
     threshold::Real = 1.0,
     ransac_kwargs...,
 )
-    pdn_pixels = pre_divide_normalize(pixels, K, order)
+    pdn_pixels = pre_divide_normalize(pixels, K)
     p3p_ransac(points, pixels, pdn_pixels, K; threshold, ransac_kwargs...)
 end
