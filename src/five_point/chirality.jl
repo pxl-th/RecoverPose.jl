@@ -8,40 +8,50 @@ Triangulate point given its two projection coordinates and projection matrices.
 - `P2`: Projection matrix for the second view.
 
 # Returns:
-    Triangulated point in `(x, y, z, 1)` format.
+    Triangulated point in `(x, y, z, w)` format.
 """
-function triangulate_point(p1, p2, P1, P2; kwargs...)
-    svd(_triangulation_system(p1, p2, P1, P2; kwargs...); full=true).V[:, 4]
+function triangulate_point(p1, p2, P1, P2)
+    svd(_triangulation_system(p1, p2, P1, P2); full=true).V[:, 4]
 end
 
-function iterative_triangulation(p1, p2, P1, P2; ϵ::Real = 1e-6)
+function iterative_triangulation(p1, p2, P1, P2; ϵ::Real = 1e-5)
     ω1, ω2 = 1.0, 1.0
-    res = SVector{4, Float64}(0, 0, 0, 0)
-    total_iterations = 1
+    x = SVector{4, Float64}(0, 0, 0, 0)
     for i in 1:10
-        t = triangulate_point(p1, p2, P1, P2; ω1, ω2)
-        t_norm = t / t[4]
-        # Recalculate weights.
-        ω1_new = P1[3, :] ⋅ t_norm
-        ω2_new = P2[3, :] ⋅ t_norm
-        abs(ω1_new - ω1) ≤ ϵ && abs(ω2_new - ω2) ≤ ϵ && (res = t; break)
+        x = svd(_triangulation_system(p1, p2, P1, P2, ω1, ω2); full=true).V[:, 4]
+        ω1_new = P1[3, :] ⋅ x
+        ω2_new = P2[3, :] ⋅ x
+        abs(ω1_new - ω1) ≤ ϵ && abs(ω2_new - ω2) ≤ ϵ && break
 
         ω1, ω2 = ω1_new, ω2_new
-        total_iterations += 1
     end
-    inlier = ω1 > 0 && ω2 > 0 && total_iterations ≤ 10
-    res, inlier
+    x
 end
 
-@inline function _triangulation_system(p1, p2, P1, P2; ω1 = 1.0, ω2 = 1.0)
+@inline function _triangulation_system(p1, p2, P1, P2, ω1, ω2)
     ω1, ω2 = 1.0 / ω1, 1.0 / ω2
-    x1, y1 = p1
-    x2, y2 = p2
+    c1 = (p1[1] .* P1[3, :] .- P1[1, :]) .* ω1
+    c2 = (p1[2] .* P1[3, :] .- P1[2, :]) .* ω1
+    c3 = (p2[1] .* P2[3, :] .- P2[1, :]) .* ω2
+    c4 = (p2[2] .* P2[3, :] .- P2[2, :]) .* ω2
     SMatrix{4, 4, Float64}(
-        (x1 * P1[3,1] - P1[1,1]) * ω1, (y1 * P1[3,1] - P1[2,1]) * ω1, (x2 * P2[3,1] - P2[1,1]) * ω2, (y2 * P2[3,1] - P2[2,1]) * ω2,
-        (x1 * P1[3,2] - P1[1,2]) * ω1, (y1 * P1[3,2] - P1[2,2]) * ω1, (x2 * P2[3,2] - P2[1,2]) * ω2, (y2 * P2[3,2] - P2[2,2]) * ω2,
-        (x1 * P1[3,3] - P1[1,3]) * ω1, (y1 * P1[3,3] - P1[2,3]) * ω1, (x2 * P2[3,3] - P2[1,3]) * ω2, (y2 * P2[3,3] - P2[2,3]) * ω2,
-        (x1 * P1[3,4] - P1[1,4]) * ω1, (y1 * P1[3,4] - P1[2,4]) * ω1, (x2 * P2[3,4] - P2[1,4]) * ω2, (y2 * P2[3,4] - P2[2,4]) * ω2,
+        c1[1], c2[1], c3[1], c4[1],
+        c1[2], c2[2], c3[2], c4[2],
+        c1[3], c2[3], c3[3], c4[3],
+        c1[4], c2[4], c3[4], c4[4],
+    )
+end
+
+@inline function _triangulation_system(p1, p2, P1, P2)
+    c1 = p1[1] .* P1[3, :] .- P1[1, :]
+    c2 = p1[2] .* P1[3, :] .- P1[2, :]
+    c3 = p2[1] .* P2[3, :] .- P2[1, :]
+    c4 = p2[2] .* P2[3, :] .- P2[2, :]
+    SMatrix{4, 4, Float64}(
+        c1[1], c2[1], c3[1], c4[1],
+        c1[2], c2[2], c3[2], c4[2],
+        c1[3], c2[3], c3[3], c4[3],
+        c1[4], c2[4], c3[4], c4[4],
     )
 end
 

@@ -25,21 +25,21 @@
     t = triangulate_point(x1, x2, P1, P2)
     t /= t[4]
     @info t
-    t, inlier = iterative_triangulation(x1, x2, P1, P2)
+    t = iterative_triangulation(x1, x2, P1, P2)
     t /= t[4]
     @info t
 
     t = triangulate_point(x1, x3, P1, P3)
     t /= t[4]
     @info t
-    t, inlier = iterative_triangulation(x1, x3, P1, P3)
+    t = iterative_triangulation(x1, x3, P1, P3)
     t /= t[4]
     @info t
 
     t = triangulate_point(x2, x3, P2, P3)
     t /= t[4]
     @info t
-    t, inlier = iterative_triangulation(x2, x3, P2, P3)
+    t = iterative_triangulation(x2, x3, P2, P3)
     t /= t[4]
     @info t
 end
