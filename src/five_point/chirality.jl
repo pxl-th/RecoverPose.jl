@@ -67,9 +67,7 @@ function chirality_test(p1, p2, P1, P2, inliers)
     for i in 1:n_points
         inliers[i] || continue
 
-        pt3d, inlier = iterative_triangulation(p1[i], p2[i], P1, P2)
-        inlier || continue
-
+        pt3d = iterative_triangulation(p1[i], p2[i], P1, P2)
         if (pt3d[3] > 0 && pt3d[4] > 0) || (pt3d[3] < 0 && pt3d[4] < 0)
             pt3d *= 1.0 / pt3d[4]
             if pt3d[3] < threshold
