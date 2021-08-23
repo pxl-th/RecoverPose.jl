@@ -10,16 +10,39 @@ Triangulate point given its two projection coordinates and projection matrices.
 # Returns:
     Triangulated point in `(x, y, z, 1)` format.
 """
-function triangulate_point(p1, p2, P1, P2)
+function triangulate_point(p1, p2, P1, P2; kwargs...)
+    svd(_triangulation_system(p1, p2, P1, P2; kwargs...); full=true).V[:, 4]
+end
+
+function iterative_triangulation(p1, p2, P1, P2; ϵ::Real = 1e-6)
+    ω1, ω2 = 1.0, 1.0
+    res = SVector{4, Float64}(0, 0, 0, 0)
+    total_iterations = 1
+    for i in 1:10
+        t = triangulate_point(p1, p2, P1, P2; ω1, ω2)
+        t_norm = t / t[4]
+        # Recalculate weights.
+        ω1_new = P1[3, :] ⋅ t_norm
+        ω2_new = P2[3, :] ⋅ t_norm
+        abs(ω1_new - ω1) ≤ ϵ && abs(ω2_new - ω2) ≤ ϵ && (res = t; break)
+
+        ω1, ω2 = ω1_new, ω2_new
+        total_iterations += 1
+    end
+    inlier = ω1 > 0 && ω2 > 0 && total_iterations ≤ 10
+    res, inlier
+end
+
+@inline function _triangulation_system(p1, p2, P1, P2; ω1 = 1.0, ω2 = 1.0)
+    ω1, ω2 = 1.0 / ω1, 1.0 / ω2
     x1, y1 = p1
     x2, y2 = p2
-    A = SMatrix{4, 4, Float64}(
-        x1*P1[3,1]-P1[1,1], y1*P1[3,1]-P1[2,1], x2*P2[3,1]-P2[1,1], y2*P2[3,1]-P2[2,1],
-        x1*P1[3,2]-P1[1,2], y1*P1[3,2]-P1[2,2], x2*P2[3,2]-P2[1,2], y2*P2[3,2]-P2[2,2],
-        x1*P1[3,3]-P1[1,3], y1*P1[3,3]-P1[2,3], x2*P2[3,3]-P2[1,3], y2*P2[3,3]-P2[2,3],
-        x1*P1[3,4]-P1[1,4], y1*P1[3,4]-P1[2,4], x2*P2[3,4]-P2[1,4], y2*P2[3,4]-P2[2,4],
+    SMatrix{4, 4, Float64}(
+        (x1 * P1[3,1] - P1[1,1]) * ω1, (y1 * P1[3,1] - P1[2,1]) * ω1, (x2 * P2[3,1] - P2[1,1]) * ω2, (y2 * P2[3,1] - P2[2,1]) * ω2,
+        (x1 * P1[3,2] - P1[1,2]) * ω1, (y1 * P1[3,2] - P1[2,2]) * ω1, (x2 * P2[3,2] - P2[1,2]) * ω2, (y2 * P2[3,2] - P2[2,2]) * ω2,
+        (x1 * P1[3,3] - P1[1,3]) * ω1, (y1 * P1[3,3] - P1[2,3]) * ω1, (x2 * P2[3,3] - P2[1,3]) * ω2, (y2 * P2[3,3] - P2[2,3]) * ω2,
+        (x1 * P1[3,4] - P1[1,4]) * ω1, (y1 * P1[3,4] - P1[2,4]) * ω1, (x2 * P2[3,4] - P2[1,4]) * ω2, (y2 * P2[3,4] - P2[2,4]) * ω2,
     )
-    svd(A; full=true).V[:, 4]
 end
 
 """
@@ -34,7 +57,9 @@ function chirality_test(p1, p2, P1, P2, inliers)
     for i in 1:n_points
         inliers[i] || continue
 
-        pt3d = triangulate_point(p1[i], p2[i], P1, P2)
+        pt3d, inlier = iterative_triangulation(p1[i], p2[i], P1, P2)
+        inlier || continue
+
         if (pt3d[3] > 0 && pt3d[4] > 0) || (pt3d[3] < 0 && pt3d[4] < 0)
             pt3d *= 1.0 / pt3d[4]
             if pt3d[3] < threshold
