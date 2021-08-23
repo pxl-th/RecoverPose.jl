@@ -11,14 +11,16 @@ Triangulate point given its two projection coordinates and projection matrices.
     Triangulated point in `(x, y, z, w)` format.
 """
 function triangulate_point(p1, p2, P1, P2)
-    svd(_triangulation_system(p1, p2, P1, P2); full=true).V[:, 4]
+    A = _triangulation_system(p1, p2, P1, P2)
+    V = eigvecs(A' * A)[:, 1]
 end
 
 function iterative_triangulation(p1, p2, P1, P2; ϵ::Real = 1e-5)
     ω1, ω2 = 1.0, 1.0
     x = SVector{4, Float64}(0, 0, 0, 0)
     for i in 1:10
-        x = svd(_triangulation_system(p1, p2, P1, P2, ω1, ω2); full=true).V[:, 4]
+        A = _triangulation_system(p1, p2, P1, P2)
+        x = eigvecs(A' * A)[:, 1]
         ω1_new = P1[3, :] ⋅ x
         ω2_new = P2[3, :] ⋅ x
         abs(ω1_new - ω1) ≤ ϵ && abs(ω2_new - ω2) ≤ ϵ && break
