@@ -8,6 +8,8 @@ Different methods for pose recovery.
 - Five Point Ransac.
 - P3P (Perspective-3-Point) for projection matrix.
 - P3P Ransac.
+- Eigen Triangulation.
+- Iterative Eigen Triangulation.
 
 ### Install
 
