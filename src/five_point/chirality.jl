@@ -57,30 +57,40 @@ end
     )
 end
 
-"""
-p1 & p2 in x, y format, pre-divided by K
-"""
-function chirality_test(p1, p2, P1, P2, inliers)
-    threshold = 50
-    n_points = length(p1)
-    is_exact = n_points == 5
+function chirality_test!(
+    inliers,
+    points1, points2, pdn1, pdn2,
+    P1, P2, K1, K2,
+)
+    n_points = length(points1)
+    Pr1, Pr2 = K1 * P1, K2 * P2
 
+    reprojections = Float64[]
     n_inliers = 0
     for i in 1:n_points
         inliers[i] || continue
 
-        pt3d = iterative_triangulation(p1[i], p2[i], P1, P2)
-        if (pt3d[3] > 0 && pt3d[4] > 0) || (pt3d[3] < 0 && pt3d[4] < 0)
-            pt3d *= 1.0 / pt3d[4]
-            if pt3d[3] < threshold
-                x2 = P2 * pt3d
-                (0 < x2[3] < threshold) && (inliers[i] = true; n_inliers += 1;)
-            end
+        pt3d = iterative_triangulation(points1[i], points2[i], Pr1, Pr2)
+        pt3d *= 1.0 / pt3d[4]
+        if pt3d[3] < 0
+            inliers[i] = false
+            continue
         end
-        # If there are only 5 points, solution must be perfect, otherwise fail.
-        is_exact && n_inliers < i && return 0, inliers
+        
+        x2 = P2 * pt3d
+        if x2[3] < 0
+            inliers[i] = false
+            continue
+        end
+
+        pp2 = Pr2 * pt3d
+        pp2 = pp2[1:2] ./ pp2[3]
+        push!(reprojections, norm(points2[i] .- pp2))
+        n_inliers += 1
     end
-    n_inliers, inliers
+
+    repr_error = isempty(reprojections) ? 1e6 : median(reprojections)
+    n_inliers, repr_error, inliers
 end
 
 function compute_projections(E)

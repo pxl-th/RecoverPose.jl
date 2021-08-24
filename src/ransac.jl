@@ -21,8 +21,8 @@ function ransac(
             # Update `n` estimate, which is the number of trials to ensure
             # a dataset with no outliers is picked with given `confidence`.
             p_no_outliers = 1.0 - (n_inliers / n_points) ^ n_samples
-            p_no_outliers = clamp(p_no_outliers, ϵ, 1 - ϵ)
-            n = log(1 - confidence) / log(p_no_outliers)
+            p_no_outliers = clamp(p_no_outliers, ϵ, 1.0 - ϵ)
+            n = log(1.0 - confidence) / log(p_no_outliers)
         end
 
         current_iteration += 1

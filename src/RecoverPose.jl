@@ -3,6 +3,7 @@ export five_point, five_point_ransac
 export triangulate_point, iterative_triangulation
 export p3p_select_model, p3p, p3p_ransac, pre_divide_normalize
 
+using Statistics
 using Random
 using LinearAlgebra
 using StaticArrays

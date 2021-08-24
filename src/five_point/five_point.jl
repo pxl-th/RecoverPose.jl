@@ -1,15 +1,14 @@
 function pre_divide(points1, points2, K1, K2)
-    # Points are now in `(x, y)` format.
     p1 = Vector{SVector{2, Float64}}(undef, length(points1))
     p2 = Vector{SVector{2, Float64}}(undef, length(points1))
     for i in 1:length(points1)
         p1[i] = SVector{2, Float64}(
-            (points1[i][2] - K1[1, 3]) / K1[1, 1],
-            (points1[i][1] - K1[2, 3]) / K1[2, 2],
+            (points1[i][1] - K1[1, 3]) / K1[1, 1],
+            (points1[i][2] - K1[2, 3]) / K1[2, 2],
         )
         p2[i] = SVector{2, Float64}(
-            (points2[i][2] - K2[1, 3]) / K2[1, 1],
-            (points2[i][1] - K2[2, 3]) / K2[2, 2],
+            (points2[i][1] - K2[1, 3]) / K2[1, 1],
+            (points2[i][2] - K2[2, 3]) / K2[2, 2],
         )
     end
     p1, p2
@@ -17,44 +16,25 @@ end
 
 """
 - `points1`:
-    Pixel coordinates of the matched points in `(y, x)` format
+    Pixel coordinates of the matched points in `(x, y)` format
     in the first image.
 - `points2`:
-    Pixel coordinates of the matched points in `(y, x)` format
+    Pixel coordinates of the matched points in `(x, y)` format
     in the second image.
 """
 function five_point(points1, points2, K1, K2)
-    (length(points1) != length(points2) || length(points1) < 5) && throw(
-        "Number of points should be ≥ 5, " *
-        "and both vectors should have the same amount of points. " *
-        "Instead, number of points is $(length(points1)) & $(length(points2))."
-    )
-    five_point(pre_divide(points1, points2, K1, K2)...)
-end
-
-function five_point(p1, p2)
+    p1, p2 = pre_divide(points1, points2, K1, K2)
     candidates = five_point_candidates(p1, p2)
-    select_candidates(candidates, p1, p2)
+    select_candidates(candidates, points1, points2, p1, p2, K1, K2)
 end
 
-function five_point_ransac(p1, p2; ransac_kwargs...)
+function five_point_ransac(points1, points2, K1, K2; ransac_kwargs...)
+    p1, p2 = pre_divide(points1, points2, K1, K2)
     sample_selection(sample_ids) = (p1[sample_ids], p2[sample_ids])
-    rank(models) = select_candidates(models, p1, p2)
+    rank(models) = select_candidates(models, points1, points2, p1, p2, K1, K2)
     ransac(
         sample_selection, five_point_candidates, rank,
-        length(p1), 5;
-        ransac_kwargs...
-    )
-end
-
-function five_point_ransac(p1, p2, K1, K2; ransac_kwargs...)
-    p1, p2 = pre_divide(p1, p2, K1, K2)
-    sample_selection(sample_ids) = (p1[sample_ids], p2[sample_ids])
-    rank(models) = select_candidates(models, p1, p2)
-    ransac(
-        sample_selection, five_point_candidates, rank,
-        length(p1), 5;
-        ransac_kwargs...
+        length(p1), 5; ransac_kwargs...
     )
 end
 
@@ -144,50 +124,46 @@ function five_point_candidates(p1, p2)
     [@. sx*E1+sy*E2+sz*E3+E4 for (sx,sy,sz) in zip(sol_x,sol_y,sol_z)]
 end
 
-function compute_essential_error(p1, p2, E, threshold)
-    threshold *= threshold
-    inliers = fill(false, length(p1))
-    n_inliers = 0
-    for i in 1:length(p1)
-        p1i = SVector{3, Float64}(p1[i]..., 1.0)
-        p2i = SVector{3, Float64}(p2[i]..., 1.0)
-
-        Ep1 = E * p1i
-        Ep2 = E' * p2i
-        error = p2i ⋅ Ep1
-        error = (error * error) / (
-            Ep1[1] * Ep1[1] + Ep1[2] * Ep1[2] +
-            Ep2[1] * Ep2[1] + Ep2[2] * Ep2[2]
-        )
-        error < threshold && (inliers[i] = true; n_inliers += 1)
-    end
-    n_inliers, inliers
-end
-
 """
 Test candidates for the essential matrix and return the best candidate.
 """
-function select_candidates(candidates, p1, p2)
-    # Perform chirality testing to select best E candidate.
+function select_candidates(
+    candidates, points1, points2, pdn1, pdn2, K1, K2,
+)
+    exact_solution = length(points1) == 5
+
     best_n_inliers = 0
+    best_score = maxintfloat()
+    best_repr_error = maxintfloat()
     best_inliers = Bool[]
     E_res = SMatrix{3, 3, Float64}(I)
     P_res = SMatrix{3, 4, Float64}(I)
 
     P_ref = SMatrix{3, 4, Float64}(I)
     for E in candidates
-        n_inliers, inliers = compute_essential_error(p1, p2, E, 1)
-        n_inliers < best_n_inliers && continue
         for P in compute_projections(E)
-            n_inliers, inliers = chirality_test(p1, p2, P_ref, P, inliers)
-            n_inliers ≤ best_n_inliers && continue
+            inliers = fill(true, length(points1))
+            n_inliers, repr_error, inliers = chirality_test!(
+                inliers,
+                points1, points2, pdn1, pdn2,
+                P_ref, P, K1, K2,
+            )
 
+            n_inliers == 0 && continue
+            n_inliers < 5 && continue
+            n_inliers == best_n_inliers &&
+                best_repr_error ≤ repr_error && continue
+
+            score = (length(points1) / n_inliers) * repr_error
+            score ≥ best_score && continue
+
+            best_score = score
+            best_repr_error = repr_error
             best_n_inliers = n_inliers
             best_inliers = inliers
             E_res = E
             P_res = P
         end
     end
-
     best_n_inliers, (E_res, P_res, best_inliers)
 end
