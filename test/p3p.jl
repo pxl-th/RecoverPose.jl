@@ -1,9 +1,8 @@
 function backproject_transform(pixels, K_inv, R, t)
     points = Vector{SVector{3, Float64}}(undef, length(pixels))
     for (i, px) in enumerate(pixels)
-        p = K_inv * SVector{3, Float64}(px[1], px[2], 1)
-        p = R * p + t
-        points[i] = p
+        p = K_inv * SVector{3, Float64}(px..., 1)
+        points[i] = R * p + t
     end
     points
 end
@@ -20,8 +19,9 @@ end
     )
     K_inv = K |> inv
 
-    R = SMatrix{3, 3, Float64}(I)
-    t = SVector{3, Float64}(1, 2, 3)
+    θ = π / 8
+    R = RotXYZ(rand() * θ, rand() * θ, rand() * θ)
+    t = SVector{3, Float64}(rand(), 0, 0)
     P_target = RecoverPose.get_transformation(R', -t)
 
     max_res = 2 * min(K[1, 3], K[2, 3])
@@ -35,12 +35,12 @@ end
     points = [p .+ rand(SVector{3, Float64}) .* noise_scale for p in points]
 
     models = p3p(points[1:3], pdn_pixels[1:3], K)
-    n_inliers, (KP, inliers, error) = p3p_select_model(models, points, pixels)
+    n_inliers, (KP, inliers, error) = p3p_select_model(models, points, pixels; threshold=0.1)
     @test n_inliers == n_points
     @test sum(inliers) == n_inliers
     @test all(isapprox.(K_inv * KP, P_target; atol=1e-2))
 
-    models = p3p(points[1:3], pdn_pixels[1:3], K)
+    models = p3p(points[1:3], pixels[1:3], K)
     n_inliers, (KP, inliers, error) = p3p_select_model(models, points, pixels)
     @test n_inliers == n_points
     @test sum(inliers) == n_inliers

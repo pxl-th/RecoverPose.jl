@@ -3,7 +3,7 @@ Recover pose [R|t] using P3P algorithm.
 
 # Arguments:
 - `points::Vector{SVector{3, Float64}}`: 3D points in `(x, y, z)`
-- `pixels::Vector{SVector{3, Float64}}`:
+- `pdn_pixels::Vector{SVector{3, Float64}}`:
     Corresponding projections onto image plane,
     predivided by `K` intrinsics and normalized.
     E.g.: Ki = int(K); p = Ki [x, y, 1]; p /= norm(p)
@@ -23,7 +23,7 @@ pages: 51-59
 """
 function p3p(
     points::Vector{SVector{3, Float64}},
-    pixels::Vector{SVector{3, Float64}},
+    pdn_pixels::Vector{SVector{3, Float64}},
     K::SMatrix{3, 3, Float64},
 )
     models = SMatrix{3, 4, Float64}[]
@@ -36,9 +36,9 @@ function p3p(
 
     sd12, sd13, sd23 = d12^2, d13^2, d23^2
 
-    α12 = pixels[1] ⋅ pixels[2]
-    α13 = pixels[1] ⋅ pixels[3]
-    α23 = pixels[2] ⋅ pixels[3]
+    α12 = pdn_pixels[1] ⋅ pdn_pixels[2]
+    α13 = pdn_pixels[1] ⋅ pdn_pixels[3]
+    α23 = pdn_pixels[2] ⋅ pdn_pixels[3]
 
     # Compute coefficients of a polynomial [7.80].
     m1, m2 = sd12, sd13 - sd23
@@ -70,9 +70,9 @@ function p3p(
             abs((√(η2^2 + η3^2 - 2 * η2 * η3 * α23) - d23) / d23) > ϵ
         ) && continue
 
-        nx1 = η1 * pixels[1]
-        z2 = η2 * pixels[2] - nx1; z2 /= norm(z2)
-        z3 = η3 * pixels[3] - nx1; z3 /= norm(z3)
+        nx1 = η1 * pdn_pixels[1]
+        z2 = η2 * pdn_pixels[2] - nx1; z2 /= norm(z2)
+        z3 = η3 * pdn_pixels[3] - nx1; z3 /= norm(z3)
         z1 = z2 × z3; z1 /= norm(z1)
         z3z1 = z3 × z1
 
@@ -108,13 +108,18 @@ function p3p_select_model(
         inliers = fill(false, length(points))
         n_inliers = 0
         for (i, (pixel, point)) in enumerate(zip(pixels, points))
-            projected = P[1:3, 1:3] * point + P[1:3, 4]
-            projected = projected[1:2] ./ projected[3]
+            projected = P * SVector{4}(point..., 1.0)
+            projected = projected[[1, 2]] ./ projected[3]
             error = norm(pixel .- projected)
+
             avg_error += error
-            error < threshold && (inliers[i] = true; n_inliers += 1;)
+            error ≥ threshold && continue
+
+            inliers[i] = true
+            n_inliers += 1
         end
         avg_error /= length(points)
+        n_inliers < 3 && continue
 
         if avg_error < best_error
             best_projection = P
@@ -153,8 +158,6 @@ Recover pose `K*[R|t]` using P3P Ransac algorithm.
 - `points::Vector{SVector{3, Float64}}`: 3D points in `(x, y, z)`
 - `pixels::Vector{SVector{2, Float64}}`:
     Corresponding projections onto image plane in `(x, y)` format.
-    These values should be predivided and normalized by the intrinsic matrix.
-    E.g.: Ki = int(K); p = Ki [x, y, 1]; p /= norm(p)
 - `pdn_pixels::Vector{SVector{3, Float64}}`:
     Corresponding projections onto image plane,
     predivided by `K` intrinsics and normalized.

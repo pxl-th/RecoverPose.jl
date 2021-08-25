@@ -130,8 +130,6 @@ Test candidates for the essential matrix and return the best candidate.
 function select_candidates(
     candidates, points1, points2, pdn1, pdn2, K1, K2,
 )
-    exact_solution = length(points1) == 5
-
     best_n_inliers = 0
     best_score = maxintfloat()
     best_repr_error = maxintfloat()
@@ -149,7 +147,6 @@ function select_candidates(
                 P_ref, P, K1, K2,
             )
 
-            n_inliers == 0 && continue
             n_inliers < 5 && continue
             n_inliers == best_n_inliers &&
                 best_repr_error ≤ repr_error && continue
