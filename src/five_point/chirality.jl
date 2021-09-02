@@ -18,8 +18,8 @@ end
 function iterative_triangulation(p1, p2, P1, P2; ϵ::Real = 1e-5)
     ω1, ω2 = 1.0, 1.0
     x = SVector{4, Float64}(0, 0, 0, 0)
-    for i in 1:10
-        A = _triangulation_system(p1, p2, P1, P2)
+    for _ in 1:10
+        A = _triangulation_system(p1, p2, P1, P2, ω1, ω2)
         x = eigvecs(A' * A)[:, 1]
         ω1_new = P1[3, :] ⋅ x
         ω2_new = P2[3, :] ⋅ x
@@ -65,47 +65,49 @@ function chirality_test!(
     n_points = length(points1)
     Pr1, Pr2 = K1 * P1, K2 * P2
 
-    reprojections = Float64[]
+    repr_error = 0.0
     n_inliers = 0
     for i in 1:n_points
         inliers[i] || continue
 
         pt3d = iterative_triangulation(points1[i], points2[i], Pr1, Pr2)
         pt3d *= 1.0 / pt3d[4]
-        if pt3d[3] < 0
+        if !(0 < pt3d[3] < 50)
             inliers[i] = false
             continue
         end
         
         x2 = P2 * pt3d
-        if x2[3] < 0
+        if !(0 < x2[3] < 50)
             inliers[i] = false
             continue
         end
 
         pp2 = Pr2 * pt3d
         pp2 = pp2[1:2] ./ pp2[3]
-        push!(reprojections, norm(points2[i] .- pp2))
+        repr_error += norm(points2[i] .- pp2)
         n_inliers += 1
     end
 
-    repr_error = isempty(reprojections) ? 1e6 : median(reprojections)
+    repr_error /= length(points1)
     n_inliers, repr_error, inliers
 end
 
 function compute_projections(E)
     W = SMatrix{3, 3, Float64}(
-         0, 1, 0,
+        0, 1, 0,
         -1, 0, 0,
-         0, 0, 1,
+        0, 0, 1,
     )
-    F = svd(E; full=true)
 
-    t = F.U[:, 3]
-    R1 = F.U * W * F.Vt
-    R2 = F.U * W' * F.Vt
-    det(R1) < 0 && (R1 *= -1)
-    det(R2) < 0 && (R2 *= -1)
+    F = svd(E; full=true)
+    U, Vt = F.U, F.Vt
+    det(U) < 0 && (U *= -1;)
+    det(Vt) < 0 && (Vt *= -1;)
+
+    t = U[:, 3]
+    R1 = U * W * Vt
+    R2 = U * W' * Vt
 
     P1 = get_transformation(R1, t)
     P2 = get_transformation(R1, -t)

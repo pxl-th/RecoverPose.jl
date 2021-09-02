@@ -7,9 +7,8 @@ function backproject_transform(pixels, K_inv, R, t)
     points
 end
 
-@testset "P3P with minor noise." begin
-    n_points = 10
-    noise_scale = 1e-6
+@testset "P3P" begin
+    n_points = 100
     
     fcmin, fcmax = 1e-3, 100
     K = SMatrix{3, 3, Float64}(
@@ -19,10 +18,10 @@ end
     )
     K_inv = K |> inv
 
-    θ = π / 8
+    θ = π / 4
     R = RotXYZ(rand() * θ, rand() * θ, rand() * θ)
-    t = SVector{3, Float64}(rand(), 0, 0)
-    P_target = RecoverPose.get_transformation(R', -t)
+    t = SVector{3, Float64}(rand(), rand() * 2, rand() * 3)
+    P_target = RecoverPose.get_transformation(R', -R' * t)
 
     max_res = 2 * min(K[1, 3], K[2, 3])
     pmin = SVector{2}(1, 1)
@@ -32,7 +31,6 @@ end
     pixels = [floor.(rand(SVector{2, Float64}) .* δ .+ pmin) for i in 1:n_points]
     pdn_pixels = pre_divide_normalize(pixels, K)
     points = backproject_transform(pixels, K_inv, R, t)
-    points = [p .+ rand(SVector{3, Float64}) .* noise_scale for p in points]
 
     models = p3p(points[1:3], pdn_pixels[1:3], K)
     n_inliers, (KP, inliers, error) = p3p_select_model(models, points, pixels; threshold=0.1)
@@ -60,7 +58,7 @@ end
 end
 
 @testset "P3P RANSAC with noise and outliers." begin
-    n_points = 50
+    n_points = 100
     noise_scale = 1e-3
     rot_atol = 0.5
     t_atol = 2
@@ -73,9 +71,10 @@ end
     )
     K_inv = K |> inv
 
-    R = SMatrix{3, 3, Float64}(I)
-    t = SVector{3, Float64}(1, 2, 3)
-    P_target = RecoverPose.get_transformation(R', -t)
+    θ = π / 8
+    R = RotXYZ(rand() * θ, rand() * θ, rand() * θ)
+    t = SVector{3, Float64}(rand(), rand() * 2, rand() * 3)
+    P_target = RecoverPose.get_transformation(R', -R' * t)
 
     max_res = 2 * min(K[1, 3], K[2, 3])
     pmin = SVector{2}(1, 1)

@@ -127,9 +127,7 @@ end
 """
 Test candidates for the essential matrix and return the best candidate.
 """
-function select_candidates(
-    candidates, points1, points2, pdn1, pdn2, K1, K2,
-)
+function select_candidates(candidates, points1, points2, pdn1, pdn2, K1, K2)
     best_n_inliers = 0
     best_score = maxintfloat()
     best_repr_error = maxintfloat()
@@ -162,5 +160,5 @@ function select_candidates(
             P_res = P
         end
     end
-    best_n_inliers, (E_res, P_res, best_inliers)
+    best_n_inliers, (E_res, P_res, best_inliers, best_repr_error)
 end
