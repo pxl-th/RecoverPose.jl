@@ -22,10 +22,8 @@ pages: 51-59
 ```
 """
 function p3p(
-    points::Vector{SVector{3, Float64}},
-    pdn_pixels::Vector{SVector{3, Float64}},
-    K::SMatrix{3, 3, Float64},
-)
+    points, pdn_pixels::AbstractVector{SVector{3, T}}, K,
+) where T <: Real
     models = SMatrix{3, 4, Float64}[]
     ϵ = 1e-4
 
@@ -42,22 +40,24 @@ function p3p(
 
     # Compute coefficients of a polynomial [7.80].
     m1, m2 = sd12, sd13 - sd23
-    p1 = PPolynomial([0, -2 * α23 * sd12])
-    p2 = PPolynomial([2 * α13 * sd23, - 2 * α23 * sd13])
-    q1 = sd23 * PPolynomial([1, - 2 * α12, 1]) + PPolynomial([0, 0, -sd12])
-    q2 = PPolynomial([sd23, 0, -sd13])
+    p1 = PPolynomial{Float64, :x}([0.0, -2.0 * α23 * sd12])
+    p2 = PPolynomial{Float64, :x}([2.0 * α13 * sd23, - 2.0 * α23 * sd13])
+    q1 = sd23 * PPolynomial{Float64, :x}([1.0, - 2.0 * α12, 1.0]) +
+        PPolynomial{Float64, :x}([0.0, 0.0, -sd12])
+    q2 = PPolynomial{Float64, :x}([sd23, 0.0, -sd13])
 
-    P = (m1 * q2 - m2 * q1)^2 - (m1 * p2 - m2 * p1) * (q1 * p2 - q2 * p1)
-    P_roots = P |> Polynomials.roots
+    P::PPolynomial{Float64, :x} =
+        (m1 * q2 - m2 * q1)^2 - (m1 * p2 - m2 * p1) * (q1 * p2 - q2 * p1)
+    P_roots::Vector{ComplexF64} = P |> Polynomials.roots
 
-    for η12 in P_roots
-        isreal(η12) || continue
-        η12 = η12 |> real
+    for η12r in P_roots
+        isreal(η12r) || continue
+        η12 = real(η12r)
         η12 ≤ 0 && continue
         # Evaluate [7.89] at η12 to get η13.
         η13 = (m1 * q2 - m2 * q1)(η12) / (m1 * p2 - m2 * p1)(η12)
         # [7.91 - 7.93].
-        denom = 1 + η12^2 - 2 * η12 * α12
+        denom = 1.0 + η12^2 - 2.0 * η12 * α12
         denom ≤ 0 && continue
         η1 = d12 / √denom
         η2 = η1 * η12
@@ -92,12 +92,7 @@ function p3p(
     models
 end
 
-function p3p_select_model(
-    models::Vector{SMatrix{3, 4, Float64}},
-    points::Vector{SVector{3, Float64}},
-    pixels::Vector{SVector{2, T}};
-    threshold::Real = 1.0,
-) where T <: Real
+function p3p_select_model(models, points, pixels; threshold::Real = 1.0)
     best_n_inliers = 0
     best_error = maxintfloat()
     best_projection = nothing
@@ -132,22 +127,18 @@ function p3p_select_model(
     best_n_inliers, (best_projection, best_inliers, best_error)
 end
 
-function pre_divide_normalize(
-    pixels::Vector{SVector{2, T}}, K::SMatrix{3, 3, Float64},
-) where T <: Real
+function pre_divide_normalize(pixels, K)
     res = Vector{SVector{3, Float64}}(undef, length(pixels))
     for (i, px) in enumerate(pixels)
-        p = SVector{3}((px[1]-K[1,3])/K[1,1], (px[2]-K[2,3])/K[2,2],1)
+        p = SVector{3, Float64}(
+            (px[1]-K[1,3])/K[1,1], (px[2]-K[2,3])/K[2,2], 1,
+        )
         res[i] = normalize(p)
     end
     res
 end
 
-function p3p(
-    points::Vector{SVector{3, Float64}},
-    pixels::Vector{SVector{2, Float64}},
-    K::SMatrix{3, 3, Float64},
-)
+function p3p(points, pixels::AbstractVector{SVector{2, T}}, K) where T <: Real
     p3p(points, pre_divide_normalize(pixels, K), K)
 end
 
@@ -180,12 +171,7 @@ pages: 51-59
 ```
 """
 function p3p_ransac(
-    points::Vector{SVector{3, Float64}},
-    pixels::Vector{SVector{2, Float64}},
-    pdn_pixels::Vector{SVector{3, Float64}},
-    K::SMatrix{3, 3, Float64};
-    threshold::Real = 1.0,
-    ransac_kwargs...,
+    points, pixels, pdn_pixels, K; threshold::Real = 1.0, ransac_kwargs...,
 )
     sample_selection(sample_ids) =
         (points[sample_ids], pdn_pixels[sample_ids], K)
@@ -223,13 +209,7 @@ chapter: 7.3 Calibrated camera pose computation.
 pages: 51-59
 ```
 """
-function p3p_ransac(
-    points::Vector{SVector{3, Float64}},
-    pixels::Vector{SVector{2, Float64}},
-    K::SMatrix{3, 3, Float64},
-    threshold::Real = 1.0,
-    ransac_kwargs...,
-)
+function p3p_ransac(points, pixels, K; threshold::Real = 1.0, ransac_kwargs...)
     pdn_pixels = pre_divide_normalize(pixels, K)
     p3p_ransac(points, pixels, pdn_pixels, K; threshold, ransac_kwargs...)
 end

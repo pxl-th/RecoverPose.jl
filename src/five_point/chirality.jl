@@ -4,8 +4,8 @@ Triangulate point given its two projection coordinates and projection matrices.
 # Arguments
 - `p1`: Pixel coordinates of a point in `(x, y)` format in the first view.
 - `p2`: Pixel coordinates of a point in `(x, y)` format in the second view.
-- `P1`: Projection matrix for the first view.
-- `P2`: Projection matrix for the second view.
+- `P1`: 3x4 Projection matrix for the first view.
+- `P2`: 3x4 Projection matrix for the second view.
 
 # Returns:
     Triangulated point in `(x, y, z, w)` format.
@@ -15,12 +15,12 @@ function triangulate_point(p1, p2, P1, P2)
     V = eigvecs(A' * A)[:, 1]
 end
 
-function iterative_triangulation(p1, p2, P1, P2; ϵ::Real = 1e-5)
+function iterative_triangulation(p1, p2, P1, P2; ϵ::Float64 = 1e-5)
     ω1, ω2 = 1.0, 1.0
     x = SVector{4, Float64}(0, 0, 0, 0)
     for _ in 1:10
         A = _triangulation_system(p1, p2, P1, P2, ω1, ω2)
-        x = eigvecs(A' * A)[:, 1]
+        x = real(eigvecs(A' * A)[:, 1])
         ω1_new = P1[3, :] ⋅ x
         ω2_new = P2[3, :] ⋅ x
         abs(ω1_new - ω1) ≤ ϵ && abs(ω2_new - ω2) ≤ ϵ && break
@@ -57,26 +57,20 @@ end
     )
 end
 
-function chirality_test!(
-    inliers,
-    points1, points2, pdn1, pdn2,
-    P1, P2, K1, K2,
-)
+function chirality_test!(inliers, points1, points2, P1, P2, K1, K2)
     n_points = length(points1)
     Pr1, Pr2 = K1 * P1, K2 * P2
 
     repr_error = 0.0
     n_inliers = 0
     for i in 1:n_points
-        inliers[i] || continue
-
         pt3d = iterative_triangulation(points1[i], points2[i], Pr1, Pr2)
         pt3d *= 1.0 / pt3d[4]
         if !(0 < pt3d[3] < 50)
             inliers[i] = false
             continue
         end
-        
+
         x2 = P2 * pt3d
         if !(0 < x2[3] < 50)
             inliers[i] = false

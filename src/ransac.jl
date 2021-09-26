@@ -2,16 +2,14 @@ function ransac(
     sample_selector, kernel, rank, n_points::Int, n_samples::Int;
     iterations = 100, confidence = 0.99,
 )
-    ϵ = eps()
-
     best_M = nothing
     best_n_inliers = 0
     n = iterations
 
+    ϵ = eps()
     current_iteration = 0
     while n > current_iteration
         ids = randperm(n_points)[1:n_samples]
-
         M = kernel(sample_selector(ids)...)
         n_inliers, M = rank(M)
 
@@ -29,5 +27,6 @@ function ransac(
         current_iteration > iterations && break
     end
 
+    best_M ≡ nothing && return nothing
     best_n_inliers, best_M
 end

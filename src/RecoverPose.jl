@@ -14,8 +14,6 @@ import Polynomials
 
 const PPolynomial = Polynomials.Polynomial
 
-@polyvar x y z
-
 include("ransac.jl")
 
 include("five_point/utils.jl")

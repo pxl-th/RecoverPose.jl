@@ -3,12 +3,12 @@ get_transformation(R, t) = SMatrix{3, 4, Float64}(R..., t...)
 """
 For polynom, with coefficients as matrices, compute traces of the coefficients.
 """
-trace(p) = mapreduce(mi -> tr(coefficient.(p, mi)) * mi, +, monomials(p[1]))
-
-function to_polynom(coeffs, x)
-    n = length(coeffs)
-    sum(coeffs[i] * x ^ (n - i) for i in 1:n)
+function trace(p::SMatrix{3, 3, T, 9})::T where T
+    mapreduce(mi -> tr(coefficient.(p, mi)) * mi, +, monomials(p[1]))
 end
+
+to_polynom(c, x, ::Val{4}) = c[1]*x^3 + c[2]*x^2 + c[3]*x + c[4]
+to_polynom(c, x, ::Val{5}) = c[1]*x^4 + c[2]*x^3 + c[3]*x^2 + c[4]*x + c[5]
 
 function null_space(p1, p2)
     n = length(p1)
@@ -33,12 +33,16 @@ end
 input -- 10-element vector
 """
 function subtract(v1, v2)
-    v1 = [0, v1[1:3]..., 0, v1[4:6]..., 0, v1[7:10]...]
-    v2 = [v2[1:3]..., 0, v2[4:6]..., 0, v2[7:10]..., 0]
-    v1 .- v2
+    Float64[
+        0.0 - v2[1], v1[1] - v2[2], v1[2] - v2[3], v1[3] - 0.0,
+        0.0 - v2[4], v1[4] - v2[5], v1[5] - v2[6], v1[6] - 0.0,
+        0.0 - v2[7], v1[7] - v2[8], v1[8] - v2[9], v1[9] - v2[10], v1[10] - 0.0,
+    ]
 end
 
 function compute_rref(E1, E2, E3, E4)
+    @polyvar x y z
+
     # One equation from rank constraint.
     c11 = E1[1, 1] * x + E2[1, 1] * y + E3[1, 1] * z + E4[1, 1]
     c12 = E1[1, 2] * x + E2[1, 2] * y + E3[1, 2] * z + E4[1, 2]
@@ -67,13 +71,14 @@ function compute_rref(E1, E2, E3, E4)
     trace_part = trace(e1 * e2) * e1
 
     row33 = mat_part .- 0.5 .* trace_part
-    row9 = mapreduce(
-        mi -> reshape(coefficient.(row33, mi), 9),
-        hcat, monomials(row33[1]),
-    )
-    M = vcat(coefficients(row1)', row9) # 10x20 matrix.
+
+    M = Matrix{Float64}(undef, 10, 20)
+    for (i, m) in enumerate(monomials(row33[1]))
+        M[1:9, i] .= reshape(coefficient.(row33, m), 9)
+    end
+    M[10, :] .= coefficients(row1)
 
     order = [1,7,2,4,3,11,8,14,5,12,6,13,17,9,15,18,10,16,19,20]
     Base.permutecols!!(M, order)
-    rref(M)
+    rref!(M)
 end
