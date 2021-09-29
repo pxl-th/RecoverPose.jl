@@ -13,7 +13,7 @@ to_polynom(c, x, ::Val{5}) = c[1]*x^4 + c[2]*x^3 + c[3]*x^2 + c[4]*x + c[5]
 function null_space(p1, p2)
     n = length(p1)
     F = Matrix{Float64}(undef, n, 9)
-    @inbounds for i in 1:n
+    @inbounds @simd for i in 1:n
         F[i, 1] = p2[i][1] * p1[i][1] # x2 * x1
         F[i, 2] = p2[i][1] * p1[i][2] # x2 * y1
         F[i, 3] = p2[i][1]            # x2
@@ -33,7 +33,7 @@ end
 input -- 10-element vector
 """
 function subtract(v1, v2)
-    Float64[
+    @inbounds Float64[
         0.0 - v2[1], v1[1] - v2[2], v1[2] - v2[3], v1[3] - 0.0,
         0.0 - v2[4], v1[4] - v2[5], v1[5] - v2[6], v1[6] - 0.0,
         0.0 - v2[7], v1[7] - v2[8], v1[8] - v2[9], v1[9] - v2[10], v1[10] - 0.0,
@@ -44,17 +44,17 @@ function compute_rref(E1, E2, E3, E4)
     @polyvar x y z
 
     # One equation from rank constraint.
-    c11 = E1[1, 1] * x + E2[1, 1] * y + E3[1, 1] * z + E4[1, 1]
-    c12 = E1[1, 2] * x + E2[1, 2] * y + E3[1, 2] * z + E4[1, 2]
-    c13 = E1[1, 3] * x + E2[1, 3] * y + E3[1, 3] * z + E4[1, 3]
+    @inbounds c11 = E1[1, 1] * x + E2[1, 1] * y + E3[1, 1] * z + E4[1, 1]
+    @inbounds c12 = E1[1, 2] * x + E2[1, 2] * y + E3[1, 2] * z + E4[1, 2]
+    @inbounds c13 = E1[1, 3] * x + E2[1, 3] * y + E3[1, 3] * z + E4[1, 3]
 
-    c21 = E1[2, 1] * x + E2[2, 1] * y + E3[2, 1] * z + E4[2, 1]
-    c22 = E1[2, 2] * x + E2[2, 2] * y + E3[2, 2] * z + E4[2, 2]
-    c23 = E1[2, 3] * x + E2[2, 3] * y + E3[2, 3] * z + E4[2, 3]
+    @inbounds c21 = E1[2, 1] * x + E2[2, 1] * y + E3[2, 1] * z + E4[2, 1]
+    @inbounds c22 = E1[2, 2] * x + E2[2, 2] * y + E3[2, 2] * z + E4[2, 2]
+    @inbounds c23 = E1[2, 3] * x + E2[2, 3] * y + E3[2, 3] * z + E4[2, 3]
 
-    c31 = E1[3, 1] * x + E2[3, 1] * y + E3[3, 1] * z + E4[3, 1]
-    c32 = E1[3, 2] * x + E2[3, 2] * y + E3[3, 2] * z + E4[3, 2]
-    c33 = E1[3, 3] * x + E2[3, 3] * y + E3[3, 3] * z + E4[3, 3]
+    @inbounds c31 = E1[3, 1] * x + E2[3, 1] * y + E3[3, 1] * z + E4[3, 1]
+    @inbounds c32 = E1[3, 2] * x + E2[3, 2] * y + E3[3, 2] * z + E4[3, 2]
+    @inbounds c33 = E1[3, 3] * x + E2[3, 3] * y + E3[3, 3] * z + E4[3, 3]
 
     # row1 - vector containing 20 coefficients for the first equation.
     row1 =
@@ -63,20 +63,18 @@ function compute_rref(E1, E2, E3, E4)
         c12 * c21 * c33 - c11 * c23 * c32
 
     # 9 equations from trace constraint.
-    # Coefficients.
     e1 = E1 * x + E2 * y + E3 * z + E4
     e2 = E1' * x + E2' * y + E3' * z + E4'
 
     mat_part = (e1 * e2) * e1
     trace_part = trace(e1 * e2) * e1
-
     row33 = mat_part .- 0.5 .* trace_part
 
     M = Matrix{Float64}(undef, 10, 20)
-    for (i, m) in enumerate(monomials(row33[1]))
+    @inbounds for (i, m) in enumerate(monomials(row33[1]))
         M[1:9, i] .= reshape(coefficient.(row33, m), 9)
     end
-    M[10, :] .= coefficients(row1)
+    @inbounds M[10, :] .= coefficients(row1)
 
     order = [1,7,2,4,3,11,8,14,5,12,6,13,17,9,15,18,10,16,19,20]
     Base.permutecols!!(M, order)

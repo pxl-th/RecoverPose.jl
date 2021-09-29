@@ -24,10 +24,10 @@ function get_target_E(R, t)
     E /= E[3, 3]
 end
 
-@testset "Perfect Solution" begin
+@testset "Five Point: Perfect Solution" begin
     res = 1024
     pp = res ÷ 2
-    K = SMatrix{3, 3}(
+    K = SMatrix{3, 3, Float64}(
         910, 0, 0,
         0, 910, 0,
         pp, pp, 1,
@@ -42,7 +42,7 @@ end
     E_target = get_target_E(R, t)
     P2 = K * P_target
 
-    for n_points in (5, 50, 500, 1000)
+    for n_points in (50, 500)
         x1, x2 = SVector{2, Float64}[], SVector{2, Float64}[]
         # Generate points for the both views.
         for i in 1:n_points
@@ -55,18 +55,6 @@ end
             push!(x2, p2[[1, 2]])
         end
 
-        if n_points == 5
-            n_inliers, (E_res, P_res, inliers, repr_error) = five_point(x1, x2, K, K)
-            E = E_res ./ E_res[3, 3]
-
-            @test repr_error < 1e-5
-            @test all(isapprox.(E, E_target; atol=1e-1))
-            @test all(isapprox.(P_res[1:3, 1:3], P_target[1:3, 1:3]; atol=1e-1))
-            @test norm(P_res[1:3, 4] .- P_target[1:3, 4]) < 0.5
-            @test sum(inliers) == n_points
-            @test n_inliers == n_points
-        end
-
         # Test 5pt RANSAC.
         n_inliers, (E_res, P_res, inliers, repr_error) = five_point_ransac(x1, x2, K, K)
         E = E_res ./ E_res[3, 3]
@@ -74,7 +62,7 @@ end
         @test repr_error < 1e-5
         @test all(isapprox.(E, E_target; atol=1e-1))
         @test all(isapprox.(P_res[1:3, 1:3], P_target[1:3, 1:3]; atol=1e-1))
-        @test norm(P_res[1:3, 4] .- P_target[1:3, 4]) < 0.5
+        @test norm(P_res[1:3, 4] .- P_target[1:3, 4]) < 1.0
         @test sum(inliers) == n_points
         @test n_inliers == n_points
     end

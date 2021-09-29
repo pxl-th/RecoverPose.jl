@@ -23,8 +23,9 @@ function iterative_triangulation(p1, p2, P1, P2; ϵ::Float64 = 1e-5)
         x = real(eigvecs(A' * A)[:, 1])
         ω1_new = P1[3, :] ⋅ x
         ω2_new = P2[3, :] ⋅ x
-        abs(ω1_new - ω1) ≤ ϵ && abs(ω2_new - ω2) ≤ ϵ && break
 
+        (ω1_new < 1e-6 || ω2_new < 1e-6) && break
+        abs(ω1_new - ω1) ≤ ϵ && abs(ω2_new - ω2) ≤ ϵ && break
         ω1, ω2 = ω1_new, ω2_new
     end
     x

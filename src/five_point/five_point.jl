@@ -1,7 +1,7 @@
 function pre_divide(points1, points2, K1, K2)
     p1 = Vector{SVector{2, Float64}}(undef, length(points1))
     p2 = Vector{SVector{2, Float64}}(undef, length(points1))
-    for i in 1:length(points1)
+    @inbounds for i in 1:length(points1)
         p1[i] = SVector{2, Float64}(
             (points1[i][1] - K1[1, 3]) / K1[1, 1],
             (points1[i][2] - K1[2, 3]) / K1[2, 2],
@@ -52,28 +52,10 @@ function five_point_candidates(p1, p2)
     @polyvar z
 
     V = null_space(p1, p2)
-
-    E1 = SMatrix{3, 3, Float64}(
-        V[1, 6], V[4, 6], V[7, 6],
-        V[2, 6], V[5, 6], V[8, 6],
-        V[3, 6], V[6, 6], V[9, 6],
-    )
-    E2 = SMatrix{3, 3, Float64}(
-        V[1, 7], V[4, 7], V[7, 7],
-        V[2, 7], V[5, 7], V[8, 7],
-        V[3, 7], V[6, 7], V[9, 7],
-    )
-    E3 = SMatrix{3, 3, Float64}(
-        V[1, 8], V[4, 8], V[7, 8],
-        V[2, 8], V[5, 8], V[8, 8],
-        V[3, 8], V[6, 8], V[9, 8],
-    )
-    E4 = SMatrix{3, 3, Float64}(
-        V[1, 9], V[4, 9], V[7, 9],
-        V[2, 9], V[5, 9], V[8, 9],
-        V[3, 9], V[6, 9], V[9, 9],
-    )
-
+    E1 = SMatrix{3, 3, Float64, 9}(V[:, 6,]...)'
+    E2 = SMatrix{3, 3, Float64, 9}(V[:, 7]...)'
+    E3 = SMatrix{3, 3, Float64, 9}(V[:, 8]...)'
+    E4 = SMatrix{3, 3, Float64, 9}(V[:, 9]...)'
     rref_M = compute_rref(E1, E2, E3, E4)
 
     eq_k = subtract(@view(rref_M[5, 11:20]), @view(rref_M[6, 11:20]))
@@ -101,35 +83,31 @@ function five_point_candidates(p1, p2)
     det_B = P1 * B31 + P2 * B32 + P3 * B33
 
     # Normalize the coefficient of the highest order.
-    if (coefficient(det_B, z^10) ≉ 0)
-        det_B = det_B / coefficient(det_B, z^10)
-    end
+    (coefficient(det_B, z^10) ≉ 0) &&
+        (det_B /= coefficient(det_B, z^10);)
 
     # Extract real roots of polynomial with companion matrix.
     Z = zeros(Float64, 10, 10)
     sub_Z = @view(Z[1:9, 2:10])
     sub_Z[diagind(sub_Z)] .= 1.0
-    Z[10, :] .= -coefficients(det_B)[end:-1:2]
+    @inbounds Z[10, :] .= -coefficients(det_B)[end:-1:2]
     sol_z = Float64[real(s) for s in eigvals!(Z) if isreal(s)]
 
     # Compute x & y.
     z6 = Matrix{Float64}(undef, length(sol_z), 7)
     z7 = Matrix{Float64}(undef, length(sol_z), 8)
-    z6[:, 7] .= 1.0
-    z7[:, 8] .= 1.0
-    z7[:, 1] .= sol_z.^7
-    for i in 1:6
+    @inbounds z6[:, 7] .= 1.0
+    @inbounds z7[:, 8] .= 1.0
+    @inbounds z7[:, 1] .= sol_z.^7
+    @inbounds for i in 1:6
         v = sol_z .^ i
         z6[:, 7 - i] .= v
         z7[:, 8 - i] .= v
     end
 
-    P1z = z7 * coefficients(P1)
-    P2z = z7 * coefficients(P2)
-    P3z = z6 * coefficients(P3)
-
-    sol_x = P1z ./ P3z
-    sol_y = P2z ./ P3z
+    P1z, P2z, P3z = z7 * coefficients(P1), z7 * coefficients(P2),
+        z6 * coefficients(P3)
+    sol_x, sol_y = P1z ./ P3z, P2z ./ P3z
     [@. sx*E1+sy*E2+sz*E3+E4 for (sx,sy,sz) in zip(sol_x,sol_y,sol_z)]
 end
 
@@ -148,7 +126,7 @@ function select_candidates(candidates, points1, points2, K1, K2)
 
     for E in candidates
         for P in compute_projections(E)
-            inliers[:] .= true
+            @inbounds inliers[:] .= true
             n_inliers, repr_error, inliers = chirality_test!(
                 inliers, points1, points2, P_ref, P, K1, K2,
             )
