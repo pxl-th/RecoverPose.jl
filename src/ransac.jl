@@ -10,8 +10,15 @@ function ransac(
     current_iteration = 0
     while n > current_iteration
         ids = randperm(n_points)[1:n_samples]
+        t1 = time()
         M = kernel(sample_selector(ids)...)
+        t2 = time()
+        # @info "[RP] Ransac kernel ($(t2 - t1) sec)."
+
+        t1 = time()
         n_inliers, M = rank(M)
+        t2 = time()
+        # @info "[RP] Ransac rank ($(t2 - t1) sec) | N Points $n_points."
 
         if n_inliers > best_n_inliers
             best_M = M
@@ -26,6 +33,7 @@ function ransac(
         current_iteration += 1
         current_iteration > iterations && break
     end
+    # @info "[RP] Ransac iterations: $current_iteration"
 
     best_M ≡ nothing && return nothing
     best_n_inliers, best_M
