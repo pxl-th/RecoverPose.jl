@@ -42,6 +42,19 @@ function five_point_ransac(
         length(p1), 5; ransac_kwargs...)
 end
 
+function essential_ransac(
+    pixels1, pixels2, K1, K2; threshold = 1.0, ransac_kwargs...,
+)
+    threshold /= (K1[1, 1] + K1[2, 2]) / 2.0
+
+    pd1, pd2 = pre_divide(pixels1, pixels2, K1, K2)
+    sample_selection(sample_ids) = (pd1[sample_ids], pd2[sample_ids])
+    rank(models) = select_candidate(models, pd1, pd2; threshold)
+    ransac(
+        sample_selection, five_point_candidates, rank,
+        length(pd1), 5; ransac_kwargs...)
+end
+
 """
 Compute essential matrix using Five-Point algorithm.
 
@@ -119,6 +132,31 @@ function five_point_candidates(p1, p2)
     [@. sx*E1+sy*E2+sz*E3+E4 for (sx,sy,sz) in zip(sol_x,sol_y,sol_z)]
 end
 
+function select_candidate(candidates, pd1, pd2; threshold)
+    best_n_inliers = 0
+    best_error = maxintfloat()
+    best_inliers = fill(true, length(pd1))
+
+    E_res = SMatrix{3, 3, Float64, 9}(I)
+
+    inliers = fill(false, length(pd1))
+    for E in candidates
+        fill!(inliers, false)
+        n_inliers, avg_error = compute_essential_error!(
+            inliers, pd1, pd2, E, threshold)
+
+        n_inliers < 5 && continue
+        n_inliers == best_n_inliers && best_error ≤ avg_error && continue
+
+        best_error = avg_error
+        best_n_inliers = n_inliers
+        copy!(best_inliers, inliers)
+        E_res = E
+    end
+
+    best_n_inliers, (E_res, best_inliers, best_error)
+end
+
 """
 Test candidates for the essential matrix and return the best candidate.
 """
@@ -154,3 +192,31 @@ function select_candidates(
 
     best_n_inliers, (E_res, P_res, best_inliers, best_repr_error)
 end
+
+function recover_pose(E, pixels1, pixels2, K1, K2; threshold = 1.0)
+    best_n_inliers = 0
+    best_error = maxintfloat()
+    best_inliers = fill(true, length(pixels1))
+    inliers = fill(true, length(pixels1))
+
+    P_res = SMatrix{3, 4, Float64, 12}(I)
+    P_ref = SMatrix{3, 4, Float64, 12}(I)
+
+    for P in compute_projections(E)
+        fill!(inliers, true)
+        n_inliers, repr_error = chirality_test!(
+            inliers, pixels1, pixels2, P_ref, P, K1, K2;
+            max_repr_error=threshold)
+
+        n_inliers < 5 && continue
+        n_inliers == best_n_inliers && threshold ≤ repr_error && continue
+
+        best_error = repr_error
+        best_n_inliers = n_inliers
+        copy!(best_inliers, inliers)
+        P_res = P
+    end
+
+    best_n_inliers, P_res, best_inliers, best_error
+end
+

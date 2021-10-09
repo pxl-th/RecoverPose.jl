@@ -71,7 +71,6 @@ function chirality_test!(
     repr_error = 0.0
     n_inliers = 0
     @inbounds for i in 1:n_points
-        # pt3d = iterative_triangulation(points1[i], points2[i], Pr1, Pr2)
         pt3d = triangulate_point(points1[i], points2[i], Pr1, Pr2)
         pt3d *= 1.0 / pt3d[4]
         if !(0 < pt3d[3] < 50)
@@ -99,6 +98,35 @@ function chirality_test!(
 
     repr_error /= length(points1)
     n_inliers, repr_error
+end
+
+function compute_essential_error!(inliers, p1, p2, E, threshold)
+    threshold *= threshold
+    n_inliers = 0
+    avg_error = 0.0
+
+    Et = E'
+
+    @inbounds for i in 1:length(p1)
+        p1i = SVector{3, Float64}(p1[i]..., 1.0)
+        p2i = SVector{3, Float64}(p2[i]..., 1.0)
+
+        Ep1 = E * p1i
+        Ep2 = Et * p2i
+
+        error = p2i ⋅ Ep1
+        error = (error * error) / (
+            Ep1[1] * Ep1[1] + Ep1[2] * Ep1[2] +
+            Ep2[1] * Ep2[1] + Ep2[2] * Ep2[2]
+        )
+        if error < threshold
+            inliers[i] = true
+            n_inliers += 1
+            avg_error += error
+        end
+    end
+
+    n_inliers, (avg_error / length(p1))
 end
 
 function compute_projections(E)
