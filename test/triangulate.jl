@@ -23,7 +23,7 @@
     p1 = SVector{2, Float64}(146, 642.288)
     p2 = SVector{2, Float64}(1137.31, 385.201)
 
-    t = triangulate_point(p1, p2, P1, P2)
+    t = triangulate(p1, p2, P1, P2)
     t /= t[4]
     @test isapprox(t, SVector{4, Float64}(0, 100, 10000, 1); atol=1e-1)
 
@@ -47,7 +47,7 @@ end
     p1 = SVector{2, Float64}(1004.08, 511.5)
     p2 = SVector{2, Float64}(274.917, 511.5)
 
-    t = triangulate_point(p1, p2, P1, P2)
+    t = triangulate(p1, p2, P1, P2)
     t /= t[4]
     @test isapprox(t, SVector{4, Float64}(500, 0, 10000, 1); atol=1e-1)
 

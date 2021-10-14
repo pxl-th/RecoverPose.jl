@@ -1,4 +1,4 @@
-get_transformation(R, t) = SMatrix{3, 4, Float64}(R..., t...)
+get_transformation(R, t) = SMatrix{3, 4, Float64, 12}(R..., t...)
 
 """
 For polynom, with coefficients as matrices, compute traces of the coefficients.
@@ -7,8 +7,8 @@ function trace(p::SMatrix{3, 3, T, 9})::T where T
     mapreduce(mi -> tr(coefficient.(p, mi)) * mi, +, monomials(p[1]))
 end
 
-to_polynom(c, x, ::Val{4}) = c[1]*x^3 + c[2]*x^2 + c[3]*x + c[4]
-to_polynom(c, x, ::Val{5}) = c[1]*x^4 + c[2]*x^3 + c[3]*x^2 + c[4]*x + c[5]
+@inline to_polynom(c, x, ::Val{4}) = c[1]*x^3 + c[2]*x^2 + c[3]*x + c[4]
+@inline to_polynom(c, x, ::Val{5}) = c[1]*x^4 + c[2]*x^3 + c[3]*x^2 + c[4]*x + c[5]
 
 function null_space(p1, p2)
     n = length(p1)
@@ -36,8 +36,7 @@ function subtract(v1, v2)
     @inbounds Float64[
         0.0 - v2[1], v1[1] - v2[2], v1[2] - v2[3], v1[3] - 0.0,
         0.0 - v2[4], v1[4] - v2[5], v1[5] - v2[6], v1[6] - 0.0,
-        0.0 - v2[7], v1[7] - v2[8], v1[8] - v2[9], v1[9] - v2[10], v1[10] - 0.0,
-    ]
+        0.0 - v2[7], v1[7] - v2[8], v1[8] - v2[9], v1[9] - v2[10], v1[10] - 0.0]
 end
 
 function compute_rref(E1, E2, E3, E4)

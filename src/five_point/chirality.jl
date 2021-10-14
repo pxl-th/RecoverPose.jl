@@ -1,4 +1,8 @@
 """
+```julia
+triangulate(p1, p2, P1, P2)
+```
+
 Triangulate point given its two projection coordinates and projection matrices.
 
 # Arguments
@@ -9,16 +13,19 @@ Triangulate point given its two projection coordinates and projection matrices.
 
 # Returns:
     Triangulated point in `(x, y, z, w)` format.
+    To get actual coordinates, divide by `w`.
 """
-function triangulate_point(p1, p2, P1, P2)
-    A = _triangulation_system(p1, p2, P1, P2)
-    V = eigvecs(A' * A)[:, 1]
+function triangulate(p1, p2, P1, P2)::SVector{4, Float64}
+    p, P = (p1, p2), (P1, P2)
+    @inbounds A = SMatrix{4, 4, Float64, 16}(
+            p[i][j] * P[i][3, k] - P[i][j, k] for j ∈ 1:2, i ∈ 1:2, k ∈ 1:4)
+    eigen(A' * A).vectors[:, 1]
 end
 
 function iterative_triangulation(p1, p2, P1, P2; ϵ::Float64 = 1e-5)
     ω1, ω2 = 1.0, 1.0
     x = SVector{4, Float64}(0, 0, 0, 0)
-    @inbounds for _ in 1:10
+    @inbounds for _ ∈ 1:10
         A = _triangulation_system(p1, p2, P1, P2, ω1, ω2)
         x = real(eigvecs(A' * A)[:, 1])
         ω1_new = P1[3, :] ⋅ x
@@ -47,21 +54,6 @@ end
     m
 end
 
-@inline function _triangulation_system(p1, p2, P1, P2)
-    @inbounds begin
-    c1 = p1[1] .* P1[3, :] .- P1[1, :]
-    c2 = p1[2] .* P1[3, :] .- P1[2, :]
-    c3 = p2[1] .* P2[3, :] .- P2[1, :]
-    c4 = p2[2] .* P2[3, :] .- P2[2, :]
-    m = SMatrix{4, 4, Float64, 16}(
-        c1[1], c2[1], c3[1], c4[1],
-        c1[2], c2[2], c3[2], c4[2],
-        c1[3], c2[3], c3[3], c4[3],
-        c1[4], c2[4], c3[4], c4[4])
-    end
-    m
-end
-
 function chirality_test!(
     inliers, points1, points2, P1, P2, K1, K2; max_repr_error = 1.0,
 )
@@ -70,8 +62,12 @@ function chirality_test!(
 
     repr_error = 0.0
     n_inliers = 0
-    @inbounds for i in 1:n_points
-        pt3d = triangulate_point(points1[i], points2[i], Pr1, Pr2)
+    xy_ids = SVector{2, UInt8}(1, 2)
+
+    @inbounds for i ∈ 1:n_points
+        point1, point2 = points1[i], points2[i]
+
+        pt3d = triangulate(point1, point2, Pr1, Pr2)
         pt3d *= 1.0 / pt3d[4]
         if !(0 < pt3d[3] < 50)
             inliers[i] = false
@@ -85,18 +81,19 @@ function chirality_test!(
         end
 
         projection = Pr2 * pt3d
-        pixel = projection[1:2] ./ projection[3]
-        Δ = norm(points2[i] .- pixel)
-        if Δ > max_repr_error
+        pixel = projection[xy_ids] .* (1.0 / projection[3])
+        Δ = point2 .- pixel
+        error = √(Δ[1]^2 + Δ[2]^2)
+        if error > max_repr_error
             inliers[i] = false
             continue
         end
 
-        repr_error += Δ
+        repr_error += error
         n_inliers += 1
     end
 
-    repr_error /= length(points1)
+    repr_error /= n_inliers
     n_inliers, repr_error
 end
 
@@ -107,7 +104,7 @@ function compute_essential_error!(inliers, p1, p2, E, threshold)
 
     Et = E'
 
-    @inbounds for i in 1:length(p1)
+    @inbounds for i ∈ 1:length(p1)
         p1i = SVector{3, Float64}(p1[i]..., 1.0)
         p2i = SVector{3, Float64}(p2[i]..., 1.0)
 
@@ -117,8 +114,7 @@ function compute_essential_error!(inliers, p1, p2, E, threshold)
         error = p2i ⋅ Ep1
         error = (error * error) / (
             Ep1[1] * Ep1[1] + Ep1[2] * Ep1[2] +
-            Ep2[1] * Ep2[1] + Ep2[2] * Ep2[2]
-        )
+            Ep2[1] * Ep2[1] + Ep2[2] * Ep2[2])
         if error < threshold
             inliers[i] = true
             n_inliers += 1
@@ -130,10 +126,7 @@ function compute_essential_error!(inliers, p1, p2, E, threshold)
 end
 
 function compute_projections(E)
-    W = SMatrix{3, 3, Float64, 9}(
-        0, 1, 0,
-        -1, 0, 0,
-        0, 0, 1)
+    W = SMatrix{3, 3, Float64, 9}(0, 1, 0, -1, 0, 0, 0, 0, 1)
 
     F = svd(E; full=true)
     U, Vt = F.U, F.Vt
