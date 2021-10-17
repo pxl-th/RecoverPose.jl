@@ -1,20 +1,27 @@
 """
-Recover pose [R|t] using P3P algorithm.
+```julia
+p3p(points, pdn_pixels::AbstractVector{SVector{3, T}}, K)
+```
+
+Recover pose using P3P algorithm.
 
 # Arguments:
-- `points::Vector{SVector{3, Float64}}`: 3D points in `(x, y, z)`
-- `pdn_pixels::Vector{SVector{3, Float64}}`:
-    Corresponding projections onto image plane,
+
+- `points: Vector of 3D points in `(x, y, z)` format.
+- `pdn_pixels::AbstractVector{SVector{3, Float64}}`:
+    Corresponding projections of `points` onto image plane,
     predivided by `K` intrinsics and normalized.
-    E.g.: Ki = int(K); p = Ki [x, y, 1]; p /= norm(p)
+    E.g.: `Ki = inv(K); p = Ki [x, y, 1]; p /= norm(p)`.
 - `K::SMatrix{3, 3, Float64}`: Camera intrinsics.
 
 # Returns:
+
 `Vector{SMatrix{3, 4, Float64}}` vector of up to 4 possible solutions.
 Each element is a projection matrix `P = K * [R|t]`.
 To get pure transformation matrix, multiply `P` by `inv(K)`.
 
 # References:
+
 ```
 Link: https://cmp.felk.cvut.cz/~pajdla/gvg/GVG-2016-Lecture.pdf
 chapter: 7.3 Calibrated camera pose computation.
@@ -92,7 +99,33 @@ function p3p(
     models
 end
 
-function p3p_select_model(models, points, pixels; threshold::Real = 1.0)
+"""
+```julia
+p3p_select_model(models, points, pixels; threshold = 1.0)
+```
+
+Select best pose from `models`.
+
+# Arguments:
+
+- `models`: Projection matrices from which to select best one.
+- `points`: 3D points in `(x, y, z)`
+- `pixels`: Corresponding projections onto image plane in `(x, y)` format.
+- `threshold`: Maximum distance in pixels between projected point
+    and its target pixel, for the point to be considered inlier.
+    Default value is `1.0`.
+
+# Returns:
+
+`n_inliers, (projection, inliers, error)`.
+
+- `n_inliers`: Number of inliers for the `projection`.
+- `projection`: `K * P` projection matrix that projects `points`
+    onto image plane.
+- `inliers`: Boolean vector indicating which point is inlier.
+- `error`: Average reprojection error for the `pose`.
+"""
+function p3p_select_model(models, points, pixels; threshold = 1.0)
     best_n_inliers = 0
     best_error = maxintfloat()
     best_projection = nothing
@@ -127,12 +160,19 @@ function p3p_select_model(models, points, pixels; threshold::Real = 1.0)
     best_n_inliers, (best_projection, best_inliers, best_error)
 end
 
+"""
+```julia
+pre_divide_normalize(pixels, K)
+```
+
+Divide `pixels` by `K` intrinsic matrix and normalize them.
+`pixels` in `(x, y)` format.
+"""
 function pre_divide_normalize(pixels, K)
     res = Vector{SVector{3, Float64}}(undef, length(pixels))
-    for (i, px) in enumerate(pixels)
+    @inbounds for (i, px) in enumerate(pixels)
         p = SVector{3, Float64}(
-            (px[1]-K[1,3])/K[1,1], (px[2]-K[2,3])/K[2,2], 1,
-        )
+            (px[1] - K[1, 3]) / K[1, 1], (px[2] - K[2, 3]) / K[2, 2], 1)
         res[i] = normalize(p)
     end
     res
@@ -143,27 +183,37 @@ function p3p(points, pixels::AbstractVector{SVector{2, T}}, K) where T <: Real
 end
 
 """
+```julia
+p3p_ransac(points, pixels, pdn_pixels, K; threshold = 1.0, ransac_kwargs...)
+```
+
 Recover pose `K*[R|t]` using P3P Ransac algorithm.
 
 # Arguments:
-- `points::Vector{SVector{3, Float64}}`: 3D points in `(x, y, z)`
-- `pixels::Vector{SVector{2, Float64}}`:
-    Corresponding projections onto image plane in `(x, y)` format.
-- `pdn_pixels::Vector{SVector{3, Float64}}`:
-    Corresponding projections onto image plane,
+
+- `points`: 3D points in `(x, y, z)`
+- `pixels`: Corresponding projections onto image plane in `(x, y)` format.
+- `pdn_pixels`: Corresponding projections onto image plane,
     predivided by `K` intrinsics and normalized.
-    E.g.: Ki = int(K); p = Ki [x, y, 1]; p /= norm(p)
-- `K::SMatrix{3, 3, Float64}`: Camera intrinsics.
-- `threshold::Real`:
-    Maximum distance in pixels between projected point and its target pixel,
-    for the point to be considered inlier. Default value is `1.0`.
+    E.g.: `Ki = inv(K); p = Ki [x, y, 1]; p /= norm(p)`.
+- `K`: Camera intrinsics.
+- `threshold`: Maximum distance in pixels between projected point
+    and its target pixel, for the point to be considered inlier.
+    Default value is `1.0`.
+- `ransac_kwargs...`: Keyword arguments passed to [`ransac`](@ref).
 
 # Returns:
-`Vector{SMatrix{3, 4, Float64}}` vector of up to 4 possible solutions.
-Each element is a projection matrix `P = K * [R|t]`.
-To get pure transformation matrix, multiply `P` by `inv(K)`.
+
+`n_inliers, (projection, inliers, error)`.
+
+- `n_inliers`: Number of inliers for the `projection`.
+- `projection`: `K * P` projection matrix that projects `points`
+    onto image plane.
+- `inliers`: Boolean vector indicating which point is inlier.
+- `error`: Average reprojection error for the `pose`.
 
 # References:
+
 ```
 Link: https://cmp.felk.cvut.cz/~pajdla/gvg/GVG-2016-Lecture.pdf
 chapter: 7.3 Calibrated camera pose computation.
@@ -171,45 +221,48 @@ pages: 51-59
 ```
 """
 function p3p_ransac(
-    points, pixels, pdn_pixels, K; threshold::Real = 1.0, ransac_kwargs...,
+    points, pixels, pdn_pixels, K; threshold = 1.0, ransac_kwargs...,
 )
     sample_selection(sample_ids) =
         (points[sample_ids], pdn_pixels[sample_ids], K)
     rank(models) = p3p_select_model(models, points, pixels; threshold)
-    ransac(
-        sample_selection, p3p, rank,
-        length(points), 3;
-        ransac_kwargs...
-    )
+    ransac(sample_selection, p3p, rank, length(points), 3; ransac_kwargs...)
 end
 
 """
+```julia
+p3p_ransac(points, pixels, K; threshold = 1.0, ransac_kwargs...)
+```
+
 Recover pose `K*[R|t]` using P3P Ransac algorithm.
 
 # Arguments:
-- `points::Vector{SVector{3, Float64}}`: 3D points in `(x, y, z)`
-- `pixels::Vector{SVector{2, Float64}}`:
-    Corresponding projections onto image plane in `(x, y)` format.
-    These values, will be predivided and normalized by the intrinsic matrix.
-    E.g.: Ki = int(K); p = Ki [x, y, 1]; p /= norm(p)
-- `K::SMatrix{3, 3, Float64}`: Camera intrinsics.
+
+- `points`: 3D points in `(x, y, z)`
+- `pixels`: Corresponding projections onto image plane in `(x, y)` format.
+    These values, **WILL** be predivided and normalized by the intrinsic matrix.
+    E.g.: `Ki = inv(K); p = Ki [x, y, 1]; p /= norm(p)`.
+- `K`: Camera intrinsics.
 - `threshold::Real`:
     Maximum distance in pixels between projected point and its target pixel,
     for the point to be considered inlier. Default value is `1.0`.
+- `ransac_kwargs...`: Keyword arguments passed to [`ransac`](@ref).
 
 # Returns:
+
 `Vector{SMatrix{3, 4, Float64}}` vector of up to 4 possible solutions.
 Each element is a projection matrix `P = K * [R|t]`.
 To get pure transformation matrix, multiply `P` by `inv(K)`.
 
 # References:
+
 ```
 Link: https://cmp.felk.cvut.cz/~pajdla/gvg/GVG-2016-Lecture.pdf
 chapter: 7.3 Calibrated camera pose computation.
 pages: 51-59
 ```
 """
-function p3p_ransac(points, pixels, K; threshold::Real = 1.0, ransac_kwargs...)
+function p3p_ransac(points, pixels, K; threshold = 1.0, ransac_kwargs...)
     pdn_pixels = pre_divide_normalize(pixels, K)
     p3p_ransac(points, pixels, pdn_pixels, K; threshold, ransac_kwargs...)
 end

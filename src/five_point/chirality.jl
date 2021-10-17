@@ -5,53 +5,23 @@ triangulate(p1, p2, P1, P2)
 
 Triangulate point given its two projection coordinates and projection matrices.
 
-# Arguments
+# Arguments:
+
 - `p1`: Pixel coordinates of a point in `(x, y)` format in the first view.
 - `p2`: Pixel coordinates of a point in `(x, y)` format in the second view.
-- `P1`: 3x4 Projection matrix for the first view.
-- `P2`: 3x4 Projection matrix for the second view.
+- `P1`: `3x4` or `4x4` projection matrix `K * P` for the first view.
+- `P2`: `3x4` or `4x4` projection matrix `K * P` for the second view.
 
 # Returns:
-    Triangulated point in `(x, y, z, w)` format.
-    To get actual coordinates, divide by `w`.
+
+Triangulated point in `(x, y, z, w)` format.
+To get actual coordinates, divide by `w`.
 """
 function triangulate(p1, p2, P1, P2)::SVector{4, Float64}
     p, P = (p1, p2), (P1, P2)
     @inbounds A = SMatrix{4, 4, Float64, 16}(
             p[i][j] * P[i][3, k] - P[i][j, k] for j ∈ 1:2, i ∈ 1:2, k ∈ 1:4)
     eigen(A' * A).vectors[:, 1]
-end
-
-function iterative_triangulation(p1, p2, P1, P2; ϵ::Float64 = 1e-5)
-    ω1, ω2 = 1.0, 1.0
-    x = SVector{4, Float64}(0, 0, 0, 0)
-    @inbounds for _ ∈ 1:10
-        A = _triangulation_system(p1, p2, P1, P2, ω1, ω2)
-        x = real(eigvecs(A' * A)[:, 1])
-        ω1_new = P1[3, :] ⋅ x
-        ω2_new = P2[3, :] ⋅ x
-
-        (abs(ω1_new) < ϵ || abs(ω2_new) < ϵ) && break
-        abs(ω1_new - ω1) ≤ ϵ && abs(ω2_new - ω2) ≤ ϵ && break
-        ω1, ω2 = ω1_new, ω2_new
-    end
-    x
-end
-
-@inline function _triangulation_system(p1, p2, P1, P2, ω1, ω2)
-    ω1, ω2 = 1.0 / ω1, 1.0 / ω2
-    @inbounds begin
-    c1 = (p1[1] .* P1[3, :] .- P1[1, :]) .* ω1
-    c2 = (p1[2] .* P1[3, :] .- P1[2, :]) .* ω1
-    c3 = (p2[1] .* P2[3, :] .- P2[1, :]) .* ω2
-    c4 = (p2[2] .* P2[3, :] .- P2[2, :]) .* ω2
-    m = SMatrix{4, 4, Float64, 16}(
-        c1[1], c2[1], c3[1], c4[1],
-        c1[2], c2[2], c3[2], c4[2],
-        c1[3], c2[3], c3[3], c4[3],
-        c1[4], c2[4], c3[4], c4[4])
-    end
-    m
 end
 
 function chirality_test!(

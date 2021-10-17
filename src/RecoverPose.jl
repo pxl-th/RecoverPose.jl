@@ -1,8 +1,7 @@
 module RecoverPose
-export five_point, five_point_ransac
-export triangulate, iterative_triangulation
+export five_point, five_point_ransac, essential_ransac, recover_pose
 export p3p_select_model, p3p, p3p_ransac, pre_divide_normalize
-export essential_ransac, recover_pose
+export triangulate, ransac
 
 using Statistics
 using Random

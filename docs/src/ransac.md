@@ -1,0 +1,5 @@
+# RANSAC
+
+```@docs
+ransac
+```

@@ -1,0 +1,5 @@
+# Triangulation
+
+```@docs
+triangulate
+```
