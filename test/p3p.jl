@@ -9,7 +9,7 @@ end
 
 @testset "P3P" begin
     n_points = 100
-    
+
     fcmin, fcmax = 1e-3, 100
     K = SMatrix{3, 3, Float64}(
         rand() * (fcmax - fcmin) + fcmin, 0, 0,
@@ -43,7 +43,7 @@ end
     @test n_inliers == n_points
     @test sum(inliers) == n_inliers
     @test all(isapprox.(K_inv * KP, P_target; atol=1e-2))
-    
+
     # Test P3P RANSAC.
 
     n_inliers, (KP, inliers, error) = p3p_ransac(points, pixels, pdn_pixels, K)
@@ -62,7 +62,7 @@ end
     noise_scale = 1e-3
     rot_atol = 0.5
     t_atol = 2
-    
+
     fcmin, fcmax = 1e-3, 100
     K = SMatrix{3, 3, Float64}(
         rand() * (fcmax - fcmin) + fcmin, 0, 0,

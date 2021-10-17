@@ -26,10 +26,6 @@
     t = triangulate(p1, p2, P1, P2)
     t /= t[4]
     @test isapprox(t, SVector{4, Float64}(0, 100, 10000, 1); atol=1e-1)
-
-    t = iterative_triangulation(p1, p2, P1, P2)
-    t /= t[4]
-    @test isapprox(t, SVector{4, Float64}(0, 100, 10000, 1); atol=1e-1)
 end
 
 @testset "Triangulation: Horizontal setup" begin
@@ -48,10 +44,6 @@ end
     p2 = SVector{2, Float64}(274.917, 511.5)
 
     t = triangulate(p1, p2, P1, P2)
-    t /= t[4]
-    @test isapprox(t, SVector{4, Float64}(500, 0, 10000, 1); atol=1e-1)
-
-    t = iterative_triangulation(p1, p2, P1, P2)
     t /= t[4]
     @test isapprox(t, SVector{4, Float64}(500, 0, 10000, 1); atol=1e-1)
 end
