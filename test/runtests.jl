@@ -44,8 +44,8 @@ end
     P2 = K * P_target
 
     x1, x2 = SVector{2, Float64}[], SVector{2, Float64}[]
-    # Generate points for the both views.
-    n_points = 1000
+
+    n_points = 50
     for i in 1:n_points
         p1 = SVector{3, Float64}(rand() * res, rand() * res, 1.0)
         p1h = SVector{4, Float64}((K_inv * p1)..., 1.0)
@@ -56,19 +56,6 @@ end
         push!(x2, p2[[1, 2]])
     end
 
-    # n_inliers, model = essential_ransac(x1, x2, K, K)
-    # E_res, inliers, e_error = model
-    # _, P_res, _, _ = recover_pose(E_res, x1, x2, K, K)
-    # E = E_res ./ E_res[3, 3]
-
-    # @test e_error < 1e-5
-    # @test all(isapprox.(E, E_target; atol=1e-1))
-    # @test all(isapprox.(P_res[1:3, 1:3], P_target[1:3, 1:3]; atol=1e-1))
-    # @test norm(P_res[1:3, 4] .- P_target[1:3, 4]) < 1.0
-    # @test sum(inliers) == n_points
-    # @test n_inliers == n_points
-
-    # Test 5pt RANSAC.
     n_inliers, model = five_point_ransac(x1, x2, K, K)
     E_res, P_res, inliers, repr_error = model
     E = E_res ./ E_res[3, 3]
