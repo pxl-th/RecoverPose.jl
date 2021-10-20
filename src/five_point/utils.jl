@@ -1,4 +1,4 @@
-get_transformation(R, t) = SMatrix{3, 4, Float64, 12}(R..., t...)
+@inline get_transformation(R, t) = SMatrix{3, 4, Float64, 12}(R..., t...)
 
 """
 For polynom, with coefficients as matrices, compute traces of the coefficients.
@@ -7,39 +7,32 @@ function trace(p::SMatrix{3, 3, T, 9})::T where T
     mapreduce(mi -> tr(coefficient.(p, mi)) * mi, +, monomials(p[1]))
 end
 
-@inline to_polynom(c, x, ::Val{4}) = c[1]*x^3 + c[2]*x^2 + c[3]*x + c[4]
-@inline to_polynom(c, x, ::Val{5}) = c[1]*x^4 + c[2]*x^3 + c[3]*x^2 + c[4]*x + c[5]
+function null_space!(F, p1, p2)
+    @inbounds @simd for i in 1:length(p1)
+        p1i, p2i = p1[i], p2[i]
+        F[i, 1] = p2i[1] * p1i[1] # x2 * x1
+        F[i, 2] = p2i[1] * p1i[2] # x2 * y1
+        F[i, 3] = p2i[1]          # x2
 
-function null_space(p1, p2)
-    n = length(p1)
-    F = Matrix{Float64}(undef, n, 9)
-    @inbounds @simd for i in 1:n
-        F[i, 1] = p2[i][1] * p1[i][1] # x2 * x1
-        F[i, 2] = p2[i][1] * p1[i][2] # x2 * y1
-        F[i, 3] = p2[i][1]            # x2
+        F[i, 4] = p2i[2] * p1i[1] # y2 * x1
+        F[i, 5] = p2i[2] * p1i[2] # y2 * y1
+        F[i, 6] = p2i[2]          # y2
 
-        F[i, 4] = p2[i][2] * p1[i][1] # y2 * x1
-        F[i, 5] = p2[i][2] * p1[i][2] # y2 * y1
-        F[i, 6] = p2[i][2]            # y2
-
-        F[i, 7] = p1[i][1]            # x1
-        F[i, 8] = p1[i][2]            # y1
-        F[i, 9] = 1
+        F[i, 7] = p1i[1]          # x1
+        F[i, 8] = p1i[2]          # y1
+        F[i, 9] = 1.0
     end
     svd(F; full=true).V
 end
 
-"""
-input -- 10-element vector
-"""
-function subtract(v1, v2)
-    @inbounds Float64[
-        0.0 - v2[1], v1[1] - v2[2], v1[2] - v2[3], v1[3] - 0.0,
-        0.0 - v2[4], v1[4] - v2[5], v1[5] - v2[6], v1[6] - 0.0,
-        0.0 - v2[7], v1[7] - v2[8], v1[8] - v2[9], v1[9] - v2[10], v1[10] - 0.0]
+@inbounds function to_polynoms(v1, v2, z)
+    p1 = -v2[1] * z^3 + (v1[1] - v2[2]) * z^2 + (v1[2] - v2[3]) * z + v1[3]
+    p2 = -v2[4] * z^3 + (v1[4] - v2[5]) * z^2 + (v1[5] - v2[6]) * z + v1[6]
+    p3 = -v2[7] * z^4 + (v1[7] - v2[8]) * z^3 + (v1[8] - v2[9]) * z^2 + (v1[9] - v2[10]) * z + v1[10]
+    p1, p2, p3
 end
 
-function compute_rref(E1, E2, E3, E4)
+function compute_rref!(M, E1, E2, E3, E4)
     @polyvar x y z
 
     # One equation from rank constraint.
@@ -69,13 +62,13 @@ function compute_rref(E1, E2, E3, E4)
     trace_part = trace(e1 * e2) * e1
     row33 = mat_part .- 0.5 .* trace_part
 
-    M = Matrix{Float64}(undef, 10, 20)
-    @inbounds for (i, m) in enumerate(monomials(row33[1]))
-        M[1:9, i] .= reshape(coefficient.(row33, m), 9)
+    @inbounds monoms = monomials(row33[1])
+    @inbounds @simd for i in 1:length(monoms)
+        M[1:9, i] .= reshape(coefficient.(row33, monoms[i]), 9)
     end
     @inbounds M[10, :] .= coefficients(row1)
 
-    order = [1,7,2,4,3,11,8,14,5,12,6,13,17,9,15,18,10,16,19,20]
+    order = UInt8[1,7,2,4,3,11,8,14,5,12,6,13,17,9,15,18,10,16,19,20]
     Base.permutecols!!(M, order)
     rref!(M)
 end
