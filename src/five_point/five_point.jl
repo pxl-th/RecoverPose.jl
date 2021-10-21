@@ -87,7 +87,7 @@ Compute Essential matrix and recover pose from it using RANSAC scheme.
 
     Pose matrix transforms points from the first camera to the second camera.
 """
-five_point_ransac(pixels1, pixels2, K1, K2; max_repr_error = 1.0, ransac_kwargs...) =
+@inline five_point_ransac(pixels1, pixels2, K1, K2; max_repr_error = 1.0, ransac_kwargs...) =
     five_point_ransac(pixels1, pixels2, K1, K2, GEEV4x4Cache(); max_repr_error, ransac_kwargs...)
 
 function five_point_ransac(
@@ -96,8 +96,8 @@ function five_point_ransac(
 )
     p1, p2 = pre_divide(pixels1, pixels2, K1, K2)
     sample_selection(sample_ids) = (p1[sample_ids], p2[sample_ids])
-    rank(models) = select_candidates(
-        models, pixels1, pixels2, K1, K2, cache; max_repr_error)
+    rank(models; sample_ids) = select_candidates(
+        models, pixels1, pixels2, K1, K2, cache; max_repr_error, sample_ids)
     ransac(
         sample_selection, five_point_candidates, rank,
         length(p1), 5; ransac_kwargs...)
@@ -130,14 +130,22 @@ Compute Essential matrix using the RANASC scheme.
 - number of inliers
 - tuple: essential matrix, boolean vector of inliers, error value.
 """
+
 function essential_ransac(
     pixels1, pixels2, K1, K2; threshold = 1.0, ransac_kwargs...,
 )
-    threshold /= (K1[1, 1] + K1[2, 2]) / 2.0
-
     pd1, pd2 = pre_divide(pixels1, pixels2, K1, K2)
+    essential_ransac(
+        pixels1, pixels2, pd1, pd2, K1, K2; threshold, ransac_kwargs...)
+end
+
+function essential_ransac(
+    pixels1, pixels2, pd1, pd2, K1, K2; threshold = 1.0, ransac_kwargs...,
+)
+    threshold /= (K1[1, 1] + K1[2, 2]) / 2.0
     sample_selection(sample_ids) = (pd1[sample_ids], pd2[sample_ids])
-    rank(models) = select_candidate(models, pd1, pd2; threshold)
+    rank(models; sample_ids) = select_candidate(
+        models, pd1, pd2; threshold, sample_ids)
     ransac(
         sample_selection, five_point_candidates, rank,
         length(pd1), 5; ransac_kwargs...)
@@ -227,13 +235,12 @@ function five_point_candidates!(cache::FivePointCache, p1, p2)
     candidates
 end
 
-function select_candidate(candidates, pd1, pd2; threshold)
+function select_candidate(candidates, pd1, pd2; threshold, sample_ids)
     best_n_inliers = 0
     best_error = maxintfloat()
     best_inliers = fill(true, length(pd1))
 
     E_res = SMatrix{3, 3, Float64, 9}(I)
-
     inliers = fill(false, length(pd1))
     for E in candidates
         fill!(inliers, false)
@@ -257,12 +264,15 @@ Test candidates for the essential matrix and return the best candidate.
 """
 function select_candidates(
     candidates, pixels1, pixels2, K1, K2, cache::GEEV4x4Cache;
-    max_repr_error = 1.0,
+    max_repr_error = 1.0, sample_ids,
 )
     best_n_inliers = 0
     best_repr_error = maxintfloat()
     best_inliers = fill(true, length(pixels1))
+
     inliers = fill(true, length(pixels1))
+    sample_inliers = fill(true, length(sample_ids))
+    sample_px1, sample_px2 = pixels1[sample_ids], pixels2[sample_ids]
 
     E_res = SMatrix{3, 3, Float64, 9}(I)
     P_res = SMatrix{3, 4, Float64, 12}(I)
@@ -270,9 +280,15 @@ function select_candidates(
 
     for E in candidates
         for P in compute_projections(E)
+            sample_n_inliers, _ = chirality_test!(
+                inliers, sample_px1, sample_px2,
+                P_ref, P, K1, K2, cache; max_repr_error)
+            sample_n_inliers < length(sample_ids) && continue
+
             fill!(inliers, true)
             n_inliers, repr_error = chirality_test!(
-                inliers, pixels1, pixels2, P_ref, P, K1, K2, cache; max_repr_error)
+                inliers, pixels1, pixels2, P_ref, P,
+                K1, K2, cache; max_repr_error)
 
             n_inliers < 5 && continue
             n_inliers == best_n_inliers &&
@@ -285,11 +301,13 @@ function select_candidates(
             P_res = P
         end
     end
-
     best_n_inliers, (E_res, P_res, best_inliers, best_repr_error)
 end
 
-function recover_pose(E, pixels1, pixels2, K1, K2; threshold = 1.0)
+@inline recover_pose(E, pixels1, pixels2, K1, K2; threshold = 1.0) =
+    recover_pose(E, pixels1, pixels2, K1, K2, GEEV4x4Cache(); threshold)
+
+function recover_pose(E, pixels1, pixels2, K1, K2, cache::GEEV4x4Cache; threshold = 1.0)
     best_n_inliers = 0
     best_error = maxintfloat()
     best_inliers = fill(true, length(pixels1))
@@ -312,7 +330,6 @@ function recover_pose(E, pixels1, pixels2, K1, K2; threshold = 1.0)
         copy!(best_inliers, inliers)
         P_res = P
     end
-
     best_n_inliers, P_res, best_inliers, best_error
 end
 

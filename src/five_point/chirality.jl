@@ -38,10 +38,10 @@ chirality_test!(inliers, points1, points2, P1, P2, K1, K2; max_repr_error = 1.0)
     chirality_test!(inliers, points1, points2, P1, P2, K1, K2, GEEV4x4Cache(); max_repr_error)
 
 function chirality_test!(
-    inliers, points1, points2, P1, P2, K1, K2, cache::GEEV4x4Cache;
+    inliers, pixels1, pixels2, P1, P2, K1, K2, cache::GEEV4x4Cache;
     max_repr_error = 1.0,
 )
-    n_points = length(points1)
+    n_points = length(pixels1)
     Pr1, Pr2 = K1 * P1, K2 * P2
 
     repr_error = 0.0
@@ -49,9 +49,8 @@ function chirality_test!(
     xy_ids = SVector{2, UInt8}(1, 2)
 
     @inbounds for i ∈ 1:n_points
-        point1, point2 = points1[i], points2[i]
-
-        pt3d = triangulate(point1, point2, Pr1, Pr2, cache)
+        pixel1, pixel2 = pixels1[i], pixels2[i]
+        pt3d = triangulate(pixel1, pixel2, Pr1, Pr2, cache)
         if (pt3d[3] < 0 && pt3d[4] > 0) || (pt3d[3] > 0 && pt3d[4] < 0)
             inliers[i] = false
             continue
@@ -71,7 +70,7 @@ function chirality_test!(
 
         projection = Pr2 * pt3d
         pixel = projection[xy_ids] .* (1.0 / projection[3])
-        Δ = point2 .- pixel
+        Δ = pixel2 .- pixel
         error = √(Δ[1]^2 + Δ[2]^2)
         if error > max_repr_error
             inliers[i] = false
@@ -81,7 +80,6 @@ function chirality_test!(
         repr_error += error
         n_inliers += 1
     end
-
     repr_error /= n_inliers
     n_inliers, repr_error
 end
@@ -90,28 +88,27 @@ function compute_essential_error!(inliers, p1, p2, E, threshold)
     threshold *= threshold
     n_inliers = 0
     avg_error = 0.0
-
     Et = E'
 
     @inbounds for i ∈ 1:length(p1)
         p1i = SVector{3, Float64}(p1[i]..., 1.0)
         p2i = SVector{3, Float64}(p2[i]..., 1.0)
-
         Ep1 = E * p1i
         Ep2 = Et * p2i
 
         error = p2i ⋅ Ep1
-        error = (error * error) / (
-            Ep1[1] * Ep1[1] + Ep1[2] * Ep1[2] +
-            Ep2[1] * Ep2[1] + Ep2[2] * Ep2[2])
+        error = (error * error) * (
+            (1.0 / Ep1[1] * Ep1[1] + Ep1[2] * Ep1[2]) +
+            (1.0 / Ep2[1] * Ep2[1] + Ep2[2] * Ep2[2]))
         if error < threshold
             inliers[i] = true
             n_inliers += 1
             avg_error += error
         end
     end
-
-    n_inliers, (avg_error / length(p1))
+    avg_error /= n_inliers
+    @show n_inliers, avg_error
+    n_inliers, avg_error
 end
 
 function compute_projections(E)

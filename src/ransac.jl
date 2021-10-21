@@ -35,7 +35,7 @@ function ransac(
     while n > current_iteration
         ids = randperm(n_points)[1:n_samples]
         M = kernel(sample_selector(ids)...)
-        n_inliers, M = rank(M)
+        n_inliers, M = rank(M; sample_ids=ids)
 
         if n_inliers > best_n_inliers
             best_M = M
