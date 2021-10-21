@@ -3,6 +3,9 @@ uuid = "4c983967-3530-4695-9d8b-d2465029e2f3"
 authors = ["Anton Smirnov <anton.smn@protonmail.com>"]
 version = "0.1.0"
 
+[compat]
+julia = "1.6"
+
 [deps]
 Documenter = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
