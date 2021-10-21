@@ -7,5 +7,5 @@ Different methods for pose recovery.
 ## Install
 
 ```julia
-]add https://github.com/pxl-th/RecoverPose.jl.git
+]add RecoverPose
 ```
