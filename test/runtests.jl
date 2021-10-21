@@ -9,8 +9,8 @@ using RecoverPose
 
 Random.seed!(0)
 
-# include("triangulate.jl")
-# include("p3p.jl")
+include("triangulate.jl")
+include("p3p.jl")
 
 """
 Compute essential matrix with R & t.

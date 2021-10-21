@@ -223,9 +223,8 @@ pages: 51-59
 function p3p_ransac(
     points, pixels, pdn_pixels, K; threshold = 1.0, ransac_kwargs...,
 )
-    sample_selection(sample_ids) =
-        (points[sample_ids], pdn_pixels[sample_ids], K)
-    rank(models) = p3p_select_model(models, points, pixels; threshold)
+    sample_selection(sample_ids) = (points[sample_ids], pdn_pixels[sample_ids], K)
+    rank(models; sample_ids) = p3p_select_model(models, points, pixels; threshold)
     ransac(sample_selection, p3p, rank, length(points), 3; ransac_kwargs...)
 end
 
