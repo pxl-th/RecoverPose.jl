@@ -107,7 +107,6 @@ function compute_essential_error!(inliers, p1, p2, E, threshold)
         end
     end
     avg_error /= n_inliers
-    @show n_inliers, avg_error
     n_inliers, avg_error
 end
 
@@ -128,6 +127,5 @@ function compute_projections(E)
     P2 = get_transformation(R1, t2)
     P3 = get_transformation(R2, t)
     P4 = get_transformation(R2, t2)
-
     P1, P2, P3, P4
 end

@@ -1,8 +1,8 @@
 module RecoverPose
 export GEEV4x4Cache
-export five_point, five_point_ransac, essential_ransac, recover_pose
+export five_point, five_point_ransac, essential_ransac
+export recover_pose, triangulate, ransac
 export p3p_select_model, p3p, p3p_ransac, pre_divide_normalize
-export triangulate, ransac
 
 using Statistics
 using Random
