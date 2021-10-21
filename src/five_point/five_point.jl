@@ -121,14 +121,13 @@ Compute Essential matrix using the RANASC scheme.
 
 # Arguments:
 
-- `pixels1`:
-    Pixel coordinates of the matched points in `(x, y)` format
-    in the first image.
-- `pixels2`:
-    Pixel coordinates of the matched points in `(x, y)` format
-    in the second image.
-- `K1`: Intrinsic matrix for the first set of points.
-- `K2`: Intrinsic matrix for the second set of points.
+- `pd1`:
+    Pixel coordinates **predivided** by `K^-1` of the matched points
+    in `(x, y)` format in the first image.
+- `pd2`:
+    Pixel coordinates **predivided** by `K^-1` of the matched points
+    in `(x, y)` format in the second image.
+- `focal_sum`: `fx + fy`.
 - `threshold`: Maximum error for the epipolar constraint. Default is `1.0`.
 - `ransac_kwargs...`: Keyword arguments passed to [`ransac`](@ref).
 
@@ -139,21 +138,10 @@ Compute Essential matrix using the RANASC scheme.
 - number of inliers
 - tuple: essential matrix, boolean vector of inliers, error value.
 """
-function essential_ransac(
-    pixels1, pixels2, K1, K2; threshold = 1.0, ransac_kwargs...,
-)
-    pd1, pd2 = pre_divide(pixels1, pixels2, K1, K2)
-    essential_ransac(
-        pixels1, pixels2, pd1, pd2, K1, K2; threshold, ransac_kwargs...)
-end
-
-function essential_ransac(
-    pixels1, pixels2, pd1, pd2, K1, K2; threshold = 1.0, ransac_kwargs...,
-)
-    threshold /= (K1[1, 1] + K1[2, 2]) / 2.0
+function essential_ransac(pd1, pd2, focal_sum; threshold = 1.0, ransac_kwargs...)
+    threshold /= focal_sum * 0.5
     sample_selection(sample_ids) = (pd1[sample_ids], pd2[sample_ids])
-    rank(models; sample_ids) = select_candidate(
-        models, pd1, pd2; threshold, sample_ids)
+    rank(models; sample_ids) = select_candidate(models, pd1, pd2; threshold)
     ransac(
         sample_selection, five_point_candidates, rank,
         length(pd1), 5; ransac_kwargs...)
@@ -243,7 +231,7 @@ function five_point_candidates!(cache::FivePointCache, p1, p2)
     candidates
 end
 
-function select_candidate(candidates, pd1, pd2; threshold, sample_ids)
+function select_candidate(candidates, pd1, pd2; threshold)
     best_n_inliers = 0
     best_error = maxintfloat()
     best_inliers = fill(true, length(pd1))

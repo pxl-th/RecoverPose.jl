@@ -69,16 +69,16 @@ end
     @test sum(inliers) == n_points
     @test n_inliers == n_points
 
-    # _, model = essential_ransac(x1, x2, pd1, pd2, K, K)
-    # E_res, _, _ = model
-    # E = E_res ./ E_res[3, 3]
-    # n_inliers, P_res, inliers, e_error = recover_pose(E_res, x1, x2, K, K, cache)
-    # @test e_error < 1e-5
-    # @test all(isapprox.(E, E_target; atol=1e-1))
-    # @test all(isapprox.(P_res[1:3, 1:3], P_target[1:3, 1:3]; atol=1e-1))
-    # @test norm(P_res[1:3, 4] .- P_target[1:3, 4]) < 1.0
-    # @test sum(inliers) == n_points
-    # @test n_inliers == n_points
+    _, model = essential_ransac(pd1, pd2, K[1, 1] + K[2, 2])
+    E_res, _, _ = model
+    E = E_res ./ E_res[3, 3]
+    n_inliers, P_res, inliers, e_error = recover_pose(E_res, x1, x2, K, K, cache)
+    @test e_error < 1e-5
+    @test all(isapprox.(E, E_target; atol=1e-1))
+    @test all(isapprox.(P_res[1:3, 1:3], P_target[1:3, 1:3]; atol=1e-1))
+    @test norm(P_res[1:3, 4] .- P_target[1:3, 4]) < 1.0
+    @test sum(inliers) == n_points
+    @test n_inliers == n_points
 
     # @btime five_point_ransac($x1, $x2, $pd1, $pd2, $K, $K, $cache)
     # @btime essential_ransac($x1, $x2, $pd1, $pd2, $K, $K)
