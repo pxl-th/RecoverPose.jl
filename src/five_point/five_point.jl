@@ -114,7 +114,7 @@ end
 
 """
 ```julia
-essential_ransac(pixels1, pixels2, K1, K2; threshold = 1.0, ransac_kwargs...)
+essential_ransac(pd1, pd2, focal_sum; threshold = 1.0, ransac_kwargs...)
 ```
 
 Compute Essential matrix using the RANASC scheme.
@@ -133,7 +133,7 @@ Compute Essential matrix using the RANASC scheme.
 
 # Returns:
 
-`n_inliers, (E, P, inliers, repr_error)`:
+`n_inliers, (E, inliers, repr_error)`:
 
 - number of inliers
 - tuple: essential matrix, boolean vector of inliers, error value.

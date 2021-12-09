@@ -55,8 +55,8 @@ function compute_rref!(M, E1, E2, E3, E4)
         c12 * c21 * c33 - c11 * c23 * c32
 
     # 9 equations from trace constraint.
-    e1 = E1 * x + E2 * y + E3 * z + E4
-    e2 = E1' * x + E2' * y + E3' * z + E4'
+    e1 = E1 .* x + E2 .* y + E3 .* z + E4
+    e2 = E1' .* x + E2' .* y + E3' .* z + E4'
 
     mat_part = (e1 * e2) * e1
     trace_part = trace(e1 * e2) * e1
