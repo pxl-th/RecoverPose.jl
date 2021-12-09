@@ -1,7 +1,7 @@
 name = "RecoverPose"
 uuid = "4c983967-3530-4695-9d8b-d2465029e2f3"
 authors = ["Anton Smirnov <anton.smn@protonmail.com>"]
-version = "0.1.0"
+version = "0.1.1"
 
 [deps]
 Documenter = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
